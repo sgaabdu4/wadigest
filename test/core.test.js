@@ -1,0 +1,139 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { canonicalUrl, extractUrls, parseHtmlMeta, youtubeId } from '../src/links.js';
+import { rankMessages, collectReactions } from '../src/rank.js';
+import { parseCommand, applyCommand } from '../src/commands.js';
+import { matchInterests } from '../src/members.js';
+import { renderGroupPost, renderPersonal } from '../src/format.js';
+import { buildDigest, mergeSummary, extractJson } from '../src/summary.js';
+import { msg, reaction } from './helpers.js';
+
+test('links: extraction and canonicalisation dedupe the same link', () => {
+  assert.deepEqual(extractUrls('look https://x.com/a/status/1?s=20 and (https://example.com/page).'), ['https://x.com/a/status/1?s=20', 'https://example.com/page']);
+  assert.equal(canonicalUrl('https://www.Example.com/page/?utm_source=wa&b=2&a=1'), 'https://example.com/page?a=1&b=2');
+  assert.equal(canonicalUrl('https://youtu.be/dQw4w9WgXcQ?si=abc'), 'https://youtube.com/watch?v=dQw4w9WgXcQ');
+  assert.equal(canonicalUrl('https://m.youtube.com/shorts/dQw4w9WgXcQ'), 'https://youtube.com/watch?v=dQw4w9WgXcQ');
+  assert.equal(canonicalUrl('https://twitter.com/a/status/1?s=20'), canonicalUrl('https://x.com/a/status/1'));
+  assert.equal(youtubeId('https://www.youtube.com/watch?v=abcdefghijk&t=10'), 'abcdefghijk');
+});
+
+test('links: html meta parsing prefers og tags and decodes entities', () => {
+  const html = '<head><title>Fallback</title><meta property="og:title" content="Cursor &amp; Claude"><meta name="description" content="An editor."></head>';
+  assert.deepEqual(parseHtmlMeta(html), { title: 'Cursor & Claude', description: 'An editor.', siteName: '' });
+});
+
+test('rank: reactions are counted once per person, last reaction wins, removal clears', () => {
+  const m = msg({ MsgID: 'T', Text: 'https://n8n.io cool' });
+  const a = '447700000001@s.whatsapp.net';
+  const b = '447700000002@s.whatsapp.net';
+  const rows = [m,
+    reaction('T', a, '👍', { Timestamp: '2026-10-14T10:00:00Z' }),
+    reaction('T', a, '🔥', { Timestamp: '2026-10-14T10:05:00Z' }),
+    reaction('T', b, '👍', { Timestamp: '2026-10-14T10:00:00Z' }),
+    reaction('T', b, '', { Timestamp: '2026-10-14T11:00:00Z' })];
+  const r = collectReactions(rows).get('T');
+  assert.deepEqual([...r.entries()], [['🔥', 1]]);
+});
+
+test('rank: same link shared twice is one item with a re-share; replies and reactions score', () => {
+  const t0 = Date.parse('2026-10-13T09:00:00Z');
+  const at = (h) => new Date(t0 + h * 3600e3).toISOString();
+  const rows = [
+    msg({ MsgID: 'L1', Text: 'try this https://cursor.com/agents?utm_source=x', SenderName: 'Sam', Timestamp: at(0) }),
+    msg({ MsgID: 'L2', Text: 'https://www.cursor.com/agents', SenderJID: 'other@s.whatsapp.net', SenderName: 'Ali', Timestamp: at(5) }),
+    msg({ MsgID: 'R1', Text: 'been using it all week, the background agents are great', QuotedMsgID: 'L1', Timestamp: at(1) }),
+    msg({ MsgID: 'R2', Text: 'same', QuotedMsgID: 'R1', Timestamp: at(2) }),
+    reaction('L1', 'x1@s.whatsapp.net', '🔥', { Timestamp: at(1) }),
+    reaction('L2', 'x2@s.whatsapp.net', '🔥', { Timestamp: at(6) }),
+    msg({ MsgID: 'Q', Text: 'quiet link https://example.org', Timestamp: at(3) }),
+    msg({ MsgID: 'TH', Text: 'Which vector DB are you all using?', Timestamp: at(4) }),
+    msg({ MsgID: 'TH1', Text: 'pgvector', QuotedMsgID: 'TH', Timestamp: at(4.1) }),
+    msg({ MsgID: 'TH2', Text: 'qdrant', QuotedMsgID: 'TH', Timestamp: at(4.2) }),
+    msg({ MsgID: 'TH3', Text: 'lancedb for local', QuotedMsgID: 'TH2', Timestamp: at(4.3) }),
+    msg({ MsgID: 'C', Text: '!digest join agents', Timestamp: at(7) }),
+    msg({ MsgID: 'D', Text: '📬 *Weekly digest*', FromMe: true, Timestamp: at(8) }),
+    msg({ MsgID: 'X', Text: 'deleted https://spam.example', Revoked: true, Timestamp: at(9) }),
+  ];
+  const { items, stats } = rankMessages(rows);
+  const cursor = items.find((i) => i.canonicalUrl === 'https://cursor.com/agents');
+  assert.ok(cursor, 'cursor link item exists');
+  assert.equal(cursor.timesShared, 2);
+  assert.equal(cursor.reshares, 1);
+  assert.equal(cursor.reactions, 2);
+  assert.equal(cursor.replies, 2);
+  assert.equal(items[0].id, cursor.id, 'most engaged item first');
+  const thread = items.find((i) => i.kind === 'thread');
+  assert.equal(thread.msgId, 'TH');
+  assert.equal(thread.replies, 3);
+  assert.ok(!items.some((i) => i.url?.includes('spam')), 'revoked messages ignored');
+  assert.ok(!items.some((i) => i.text?.includes('!digest')), 'commands ignored');
+  assert.equal(stats.links, 2);
+  assert.equal(stats.messages, 9); // excludes reactions, the command, our own digest and the revoked one
+});
+
+test('rank: uploaded videos become items', () => {
+  const { items } = rankMessages([msg({ MsgID: 'V', MediaType: 'video', MediaCaption: 'demo of my n8n flow', Filename: 'a.mp4' })]);
+  assert.equal(items[0].kind, 'video');
+  assert.equal(items[0].text, 'demo of my n8n flow');
+});
+
+test('commands: parse, join, interests, status, stop', () => {
+  assert.equal(parseCommand('hello'), null);
+  assert.deepEqual(parseCommand('!digest join agents, n8n'), { verb: 'join', arg: 'agents, n8n' });
+  assert.deepEqual(parseCommand('!Digest'), { verb: 'help', arg: '' });
+  const members = [];
+  const who = { senderJid: '447700000001@s.whatsapp.net', senderName: 'Sam' };
+  let r = applyCommand(parseCommand('!digest join Agents, n8n, #cursor'), who, members, { groupName: 'Developer Bros', schedule: { day: 'sunday', time: '09:00' } });
+  assert.ok(r.changed && /You're in/.test(r.reply) && /Sundays at 09:00/.test(r.reply));
+  assert.deepEqual(members[0].interests, ['agents', 'n8n', 'cursor']);
+  r = applyCommand(parseCommand('!digest interests design'), { ...who, senderJid: '447700000001@lid' }, members);
+  assert.deepEqual(members[0].interests, ['design'], 'lid and phone JIDs of the same user match');
+  assert.match(applyCommand(parseCommand('!digest status'), who, members).reply, /design/);
+  applyCommand(parseCommand('!digest stop'), who, members);
+  assert.equal(members[0].active, false);
+});
+
+test('interests: whole words and plurals, not substrings', () => {
+  const item = { title: 'Building AI agents with n8n workflows', text: '', url: 'https://n8n.io' };
+  assert.deepEqual(matchInterests(item, ['agent', 'workflow', 'n8n', 'art']), ['agent', 'workflow', 'n8n']);
+});
+
+function sampleDigest() {
+  const { items, stats } = rankMessages([
+    msg({ MsgID: 'A', Text: 'https://n8n.io/agents check this' }),
+    reaction('A', 'r1@s.whatsapp.net'),
+    msg({ MsgID: 'B', Text: 'https://figma.com/blog/design-systems' }),
+  ]);
+  items[0].title = 'n8n AI agents';
+  items[1].title = 'Design systems at scale';
+  return buildDigest({ items, stats }, { group: { jid: 'g@g.us', name: 'Developer Bros' }, window: { start: '2026-10-11T08:00:00Z', end: '2026-10-18T08:00:00Z' }, topN: 5 });
+}
+
+test('format: group post has header, items, links and opt-in footer', () => {
+  const text = renderGroupPost(sampleDigest(), { timeZone: 'Europe/London' });
+  assert.match(text, /^📬 \*Weekly digest · Developer Bros\*/);
+  assert.match(text, /11–18 Oct/);
+  assert.match(text, /\*1\. n8n AI agents\*/);
+  assert.match(text, /🔗 https:\/\/n8n\.io\/agents/);
+  assert.match(text, /!digest (join|interests)/);
+});
+
+test('format: personal DM puts interest matches first with a star', () => {
+  const text = renderPersonal(sampleDigest(), { name: 'Sam Smith', interests: ['design'] }, { timeZone: 'Europe/London' });
+  const first = text.indexOf('Design systems');
+  const second = text.indexOf('n8n AI agents');
+  assert.ok(first > 0 && first < second);
+  assert.match(text, /⭐ \*1\. Design systems at scale\*/);
+  assert.match(text, /Hi Sam!/);
+});
+
+test('summary: hand-in summaries merge with ranked stats and are validated', () => {
+  const base = sampleDigest();
+  const merged = mergeSummary({ version: 1, intro: 'Agents week.', items: [{ id: base.items[0].id, title: 'n8n agents', summary: 'Build agents visually.' }] }, base);
+  assert.equal(merged.items.length, 1);
+  assert.equal(merged.items[0].reactions, 1);
+  assert.equal(merged.intro, 'Agents week.');
+  assert.throws(() => mergeSummary({ items: [] }, base), /non-empty/);
+  assert.throws(() => mergeSummary({ items: [{ summary: 'x' }] }, base), /title is required/);
+  assert.deepEqual(extractJson('Sure!\n```json\n{"a":1}\n```'), { a: 1 });
+});

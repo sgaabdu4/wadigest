@@ -1,0 +1,13 @@
+{
+  "name": "wadigest",
+  "version": "2.0.0",
+  "description": "Weekly digest for a WhatsApp group: top links, videos and threads, posted to the group and DM'd to opted-in members. Runs on one person's computer, built on wacli.",
+  "type": "module",
+  "license": "MIT",
+  "bin": { "wadigest": "bin/wadigest.js" },
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "package": "bash scripts/package.sh"
+  }
+}

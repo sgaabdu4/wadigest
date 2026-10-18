@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wadigest</title>
+<style>
+  :root {
+    --bg: #f7f5f0; --ink: #2b2a27; --ink-2: #6f6b63; --ink-3: #9a968c; --line: #e8e4da; --line-2: #cfcac0;
+    --sage: #5e7d6a; --sage-2: #4e6b59; --sage-soft: #e6ece5; --on-sage: #ffffff; --danger: #a5523f; --bubble: #e3eedf; --card: #ffffff;
+    --serif: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body { font: 17px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 440px; margin: 0 auto; padding: 48px 20px 64px; }
+  .brand { text-align: center; font-family: var(--serif); font-size: 17px; color: var(--ink-3); letter-spacing: .02em; margin: 0 0 36px; }
+  .dots { text-align: center; color: var(--ink-3); font-size: 11px; letter-spacing: .5em; margin: 0 0 28px; padding-left: .5em; }
+  .dots b { color: var(--sage); font-weight: 400; }
+  h2 { font-family: var(--serif); font-weight: 400; font-size: 32px; line-height: 1.2; letter-spacing: -.01em; margin: 0 0 10px; text-align: center; }
+  p { margin: 0 0 12px; }
+  .lead { color: var(--ink-2); text-align: center; margin-bottom: 28px; }
+  .hint { color: var(--ink-3); font-size: 14px; line-height: 1.6; }
+  .center { text-align: center; }
+  .muted { color: var(--ink-3); }
+  .hidden { display: none !important; }
+  a { color: var(--sage); }
+
+  .btn { appearance: none; border: 0; font: inherit; font-size: 16px; cursor: pointer; border-radius: 999px; padding: 14px 22px;
+    background: var(--sage); color: var(--on-sage); display: inline-flex; align-items: center; justify-content: center; gap: 10px; transition: background .2s, opacity .2s; }
+  .btn:hover { background: var(--sage-2); }
+  .btn[disabled] { opacity: .55; cursor: default; }
+  .btn.wide { width: 100%; margin-top: 28px; }
+  .btn.link { background: none; color: var(--sage); padding: 8px 10px; font-size: 15px; }
+  .btn.link:hover { text-decoration: underline; background: none; }
+  .btn.soft { background: none; color: var(--ink); border: 1px solid var(--line-2); padding: 10px 18px; font-size: 15px; }
+  .btn.soft:hover { border-color: var(--sage); color: var(--sage); }
+  .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .links { margin-top: 26px; display: flex; flex-wrap: wrap; justify-content: center; gap: 0 6px; }
+
+  input[type=text], input[type=tel], input[type=password] {
+    width: 100%; font: inherit; font-size: 18px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line-2);
+    background: var(--card); color: var(--ink); outline: none; transition: border-color .2s; }
+  input:focus { border-color: var(--sage); }
+  ::placeholder { color: var(--ink-3); }
+
+  .qr { display: grid; place-items: center; margin: 8px 0 22px; }
+  .qr .box { background: #fff; padding: 16px; border-radius: 18px; min-width: 272px; min-height: 272px; display: grid; place-items: center; }
+  .code { display: flex; gap: 6px; justify-content: center; margin: 8px 0 22px; font-family: var(--mono); }
+  .code span { width: 40px; height: 54px; display: grid; place-items: center; font-size: 28px; background: var(--card); border: 1px solid var(--line-2); border-radius: 10px; }
+  .code i { width: 12px; display: grid; place-items: center; color: var(--ink-3); font-style: normal; }
+  @media (max-width: 400px) { .code span { width: 32px; height: 46px; font-size: 22px; } }
+
+  .note { display: flex; gap: 10px; align-items: center; justify-content: center; color: var(--ink-2); font-size: 15px; margin-top: 18px; text-align: center; }
+  .note.good { color: var(--sage); }
+  .note.bad { color: var(--danger); }
+  .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .9s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .err { color: var(--danger); font-size: 15px; margin-top: 14px; text-align: center; }
+
+  .glist { margin-top: 8px; }
+  .grow { display: flex; gap: 14px; align-items: center; padding: 14px 4px; cursor: pointer; border-bottom: 1px solid var(--line); }
+  .grow input { position: absolute; opacity: 0; pointer-events: none; }
+  .tick { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--line-2); flex: none; display: grid; place-items: center; color: var(--on-sage); font-size: 13px; transition: background .2s, border-color .2s; }
+  .grow input:checked + .tick { background: var(--sage); border-color: var(--sage); }
+  .grow input:checked + .tick::after { content: "✓"; }
+  .grow input:focus-visible + .tick { outline: 2px solid var(--sage); outline-offset: 2px; }
+  .search { margin-bottom: 4px; }
+
+  .sentence { font-family: var(--serif); font-size: 22px; line-height: 2; margin: 4px 0 30px; }
+  .sentence select, .sentence input[type=time] { font: inherit; color: var(--sage); background: none; border: 0; border-bottom: 1.5px solid var(--sage);
+    padding: 0 2px; margin: 0 2px; appearance: none; -webkit-appearance: none; cursor: pointer; border-radius: 0; outline: none; field-sizing: content; }
+  .sentence input[type=time]::-webkit-calendar-picker-indicator { display: none; }
+  .sentence select:focus-visible, .sentence input:focus-visible { background: var(--sage-soft); }
+  .gname { font-size: 13px; color: var(--ink-3); margin: 18px 0 4px; letter-spacing: .02em; }
+  .toggles { display: flex; gap: 4px 18px; flex-wrap: wrap; }
+  .tog { appearance: none; border: 0; background: none; font: inherit; font-size: 15px; color: var(--ink-3); padding: 4px 0; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+  .tog::before { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--line-2); }
+  .tog.on { color: var(--ink-2); }
+  .tog.on::before { background: var(--sage); border-color: var(--sage); }
+
+  .done-mark { width: 56px; height: 56px; border-radius: 50%; background: var(--sage-soft); color: var(--sage); display: grid; place-items: center; margin: 0 auto 18px; font-size: 24px; }
+  .next { font-family: var(--serif); font-size: 21px; text-align: center; margin: 0 0 30px; }
+  .phone { margin-top: 16px; background: var(--card); border-radius: 18px; padding: 14px; max-height: 480px; overflow: auto; text-align: left; }
+  .bubble { background: var(--bubble); color: var(--ink); border-radius: 14px 14px 4px 14px; padding: 12px 14px; font-size: 14.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .bubble a { color: var(--sage-2); }
+  .pvname { font-size: 13px; color: var(--ink-3); margin: 22px 0 0; text-align: center; }
+  details.more { margin-top: 26px; color: var(--ink-3); font-size: 13px; text-align: center; }
+  details.more summary { cursor: pointer; }
+  .log { font-family: var(--mono); font-size: 12px; text-align: left; background: var(--card); border-radius: 12px; padding: 10px 12px; max-height: 160px; overflow: auto; white-space: pre-wrap; margin-top: 10px; }
+  .foot { text-align: center; color: var(--ink-3); font-size: 13px; margin-top: 48px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="brand">wadigest</p>
+  <p class="dots hidden" id="steps"></p>
+  <main id="app"><p class="note"><span class="spin"></span>Loading</p></main>
+  <p class="foot">Runs on this computer. Your messages stay here.</p>
+</div>
+
+<script>
+const API = location.pathname.replace(/\/$/, '') + '/api';
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const api = async (path, body) => {
+  const r = await fetch(API + path, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'Something went wrong');
+  return j;
+};
+
+let S = null;           // server state
+let view = null;        // which screen
+let linkTab = 'qr';
+let pollTimer = null;
+let qrLib = null;
+
+const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+function setSteps(n) {
+  $('#steps').innerHTML = [1, 2, 3].map((i) => (i <= n ? '<b>●</b>' : '○')).join(' ');
+  $('#steps').classList.toggle('hidden', n === 0);
+}
+
+async function refresh() {
+  S = await api('/state');
+  return S;
+}
+
+function firstIncomplete() {
+  if (!S.ready) return 'prepare';
+  if (!S.linked) return 'link';
+  if (!S.groups.length) return 'groups';
+  if (!S.setupDone) return 'settings';
+  return 'home';
+}
+
+async function go(v) {
+  view = v;
+  clearInterval(pollTimer);
+  const screens = { prepare: viewPrepare, link: viewLink, groups: viewGroups, settings: viewSettings, home: viewHome };
+  await screens[v]();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+const note = (text, kind = '') => `<p class="note ${kind}">${kind ? '' : '<span class="spin"></span>'}${esc(text)}</p>`;
+const busy = (btn, text = '') => { btn.disabled = true; btn.innerHTML = `<span class="spin"></span>${esc(text)}`; };
+
+// ---------- Getting ready (first time only) ----------
+function viewPrepare() {
+  setSteps(0);
+  $('#app').innerHTML = `
+    <h2>Getting ready</h2>
+    <p class="lead">This takes a few minutes, just once.</p>
+    <div id="pstat">${note('Installing')}</div>
+    <div id="perr" class="err hidden"></div>
+    <button class="btn wide hidden" id="retry">Try again</button>
+    <details class="more"><summary>Details</summary><div id="joblog" class="log"></div></details>`;
+  const run = async () => {
+    $('#perr').classList.add('hidden');
+    $('#retry').classList.add('hidden');
+    $('#pstat').innerHTML = note('Installing');
+    try { await api('/prepare', {}); } catch (e) { showErr('#perr', e.message); $('#retry').classList.remove('hidden'); return; }
+    pollTimer = setInterval(async () => {
+      const j = await api('/job').catch(() => null);
+      if (!j) return;
+      $('#joblog').textContent = j.log.slice(-60).join('\n');
+      if (j.running) return;
+      clearInterval(pollTimer);
+      if (j.error) {
+        $('#pstat').innerHTML = '';
+        showErr('#perr', "That didn't finish. Check your internet connection, then try again.");
+        $('#retry').classList.remove('hidden');
+        return;
+      }
+      await refresh();
+      go(firstIncomplete());
+    }, 1000);
+  };
+  $('#retry').onclick = run;
+  run();
+}
+
+// ---------- 1. Connect WhatsApp ----------
+function codeBoxes(code) {
+  const c = code.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  const a = c.slice(0, 4).split(''), b = c.slice(4).split('');
+  return `<div class="code" aria-label="Link code ${esc(code)}">${a.map((x) => `<span>${esc(x)}</span>`).join('')}<i>–</i>${b.map((x) => `<span>${esc(x)}</span>`).join('')}</div>`;
+}
+
+async function loadQrLib() {
+  if (qrLib) return qrLib;
+  qrLib = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+    s.onload = () => res(window.QRCode);
+    s.onerror = () => { qrLib = null; rej(new Error('qr')); };
+    document.head.appendChild(s);
+  });
+  return qrLib;
+}
+
+let lastQr = '';
+async function drawQr(text) {
+  const box = $('#qrbox');
+  if (!box || text === lastQr) return;
+  lastQr = text;
+  try {
+    const QR = await loadQrLib();
+    box.innerHTML = '';
+    new QR(box, { text, width: 240, height: 240, colorDark: '#2b2a27', colorLight: '#ffffff', correctLevel: QR.CorrectLevel.L });
+  } catch {
+    lastQr = '';
+    box.innerHTML = `<p style="max-width:220px;text-align:center;color:#6f6b63;margin:0">The code couldn't load. Use a phone number instead.</p>`;
+  }
+}
+
+const HOW = 'On your phone: WhatsApp, Settings,<br>Linked devices, Link a device';
+
+async function viewLink(fresh = false) {
+  setSteps(1);
+  lastQr = '';
+  if (linkTab === 'qr') {
+    $('#app').innerHTML = `
+      <h2>Connect WhatsApp</h2>
+      <p class="lead">Scan this with your phone.</p>
+      <div class="qr"><div class="box" id="qrbox"><span class="spin" style="color:#9a968c"></span></div></div>
+      <p class="hint center">${HOW}</p>
+      <div id="lstatus"></div>
+      <p class="center"><button class="btn link" id="swap">Use a phone number instead</button></p>`;
+    $('#swap').onclick = async () => { linkTab = 'code'; await api('/link/cancel', {}); viewLink(fresh); };
+    const L = S.link;
+    if (!(['starting', 'waiting', 'syncing'].includes(L.status) && L.kind === 'qr')) await api('/link', { fresh }).catch((e) => showLinkError(e.message));
+  } else {
+    $('#app').innerHTML = `
+      <h2>Connect WhatsApp</h2>
+      <p class="lead">Type the number of the phone you'll use.</p>
+      <div id="codewrap">
+        <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+44 7700 900123" value="${esc(localStorageGet('phone'))}">
+        <button class="btn wide" id="getcode">Get a code</button>
+      </div>
+      <p class="hint center" id="codehow" style="margin-top:18px">${HOW},<br>Link with phone number instead</p>
+      <div id="lstatus"></div>
+      <p class="center"><button class="btn link" id="swap">Scan a code instead</button></p>`;
+    $('#swap').onclick = async () => { linkTab = 'qr'; await api('/link/cancel', {}); viewLink(fresh); };
+    const start = async () => {
+      const phone = $('#phone').value.trim();
+      if (phone.replace(/\D/g, '').length < 8) return showLinkError('Type the whole number, starting with the country code, like +44.');
+      localStorageSet('phone', phone);
+      busy($('#getcode'));
+      try { await api('/link', { phone, fresh }); } catch (e) { showLinkError(e.message); $('#getcode').disabled = false; $('#getcode').textContent = 'Get a code'; return; }
+      pollLink();
+    };
+    $('#getcode').onclick = start;
+    $('#phone').onkeydown = (e) => { if (e.key === 'Enter') start(); };
+    if (!(['starting', 'waiting', 'syncing'].includes(S.link.status) && S.link.kind === 'code')) return;
+  }
+  pollLink();
+}
+
+function showLinkError(msg) { const el = $('#lstatus'); if (el) el.innerHTML = note(msg, 'bad'); }
+
+function linkProgress() {
+  const L = S.link;
+  if (L.status === 'done' || (S.linked && L.status !== 'syncing' && L.status !== 'waiting')) {
+    clearInterval(pollTimer);
+    go(S.groups.length ? (S.setupDone ? 'home' : 'settings') : 'groups');
+    return;
+  }
+  if (L.status === 'error') {
+    clearInterval(pollTimer);
+    showLinkError(L.error || "That didn't work. Try again.");
+    if (linkTab === 'code' && $('#getcode')) { $('#getcode').disabled = false; $('#getcode').textContent = 'Get a code'; }
+    if (linkTab === 'qr') { $('#lstatus').innerHTML += '<button class="btn wide" id="again">Show a new code</button>'; $('#again').onclick = () => viewLink(); }
+    return;
+  }
+  if (L.status === 'syncing') {
+    $('#lstatus').innerHTML = note(`Connected. Loading your chats${L.messages ? ` (${L.messages.toLocaleString()})` : ''}`);
+    $('#lstatus .note').classList.add('good');
+    if ($('.qr')) $('.qr').classList.add('hidden');
+    if ($('#codewrap')) $('#codewrap').innerHTML = '';
+    return;
+  }
+  if (linkTab === 'qr' && L.qr) drawQr(L.qr);
+  if (linkTab === 'code' && L.code && !$('.code')) {
+    $('#codewrap').innerHTML = codeBoxes(L.code);
+    $('.lead').textContent = 'Type this code on your phone.';
+  }
+}
+
+function pollLink() {
+  clearInterval(pollTimer);
+  const tick = async () => { try { await refresh(); if (view === 'link') linkProgress(); } catch {} };
+  tick();
+  pollTimer = setInterval(tick, 1000);
+}
+
+// ---------- 2. Which groups ----------
+let picked = null; // Map jid -> group with its switches, kept while moving between screens
+
+async function viewGroups() {
+  setSteps(2);
+  if (!picked) picked = new Map(S.groups.map((g) => [g.jid, { ...g }]));
+  $('#app').innerHTML = `
+    <h2>Which groups?</h2>
+    <p class="lead">Each one gets its own summary.</p>
+    <input id="q" class="search" type="text" autocomplete="off" placeholder="Search your groups">
+    <div id="glist" class="glist">${note('Loading your groups')}</div>
+    <div id="gerr" class="err hidden"></div>
+    <button class="btn wide" id="gnext">Continue</button>`;
+  let all = [];
+  const paint = () => {
+    const q = $('#q').value.trim().toLowerCase();
+    const rows = all.filter((g) => !q || g.name.toLowerCase().includes(q));
+    $('#glist').innerHTML = rows.length
+      ? rows.map((g) => `<label class="grow"><input type="checkbox" data-jid="${esc(g.jid)}" data-name="${esc(g.name)}" ${picked.has(g.jid) ? 'checked' : ''}><span class="tick"></span><span>${esc(g.name)}</span></label>`).join('')
+      : note(all.length ? `No group called “${$('#q').value.trim()}”.` : 'This WhatsApp isn’t in any groups yet.', 'bad');
+    $('#glist').querySelectorAll('input').forEach((c) => c.onchange = () => {
+      if (c.checked) picked.set(c.dataset.jid, picked.get(c.dataset.jid) || { jid: c.dataset.jid, name: c.dataset.name, post: true, pin: true, dm: true });
+      else picked.delete(c.dataset.jid);
+      $('#gerr').classList.add('hidden');
+    });
+  };
+  $('#q').oninput = paint;
+  try { all = (await api('/groups')).matches; } catch (e) { showErr('#gerr', e.message); }
+  paint();
+  $('#gnext').onclick = () => (picked.size ? go('settings') : showErr('#gerr', 'Tap at least one group.'));
+}
+
+// ---------- 3. How it works ----------
+const OFTEN = [[1, 'every day'], [2, 'every 2 days'], [3, 'every 3 days'], [7, 'every week'], [14, 'every 2 weeks'], [30, 'every month']];
+const MODES = [['digest', 'simply'], ['local', 'with local AI'], ['claude', 'with Claude']];
+
+async function viewSettings() {
+  setSteps(3);
+  if (!picked) picked = new Map(S.groups.map((g) => [g.jid, { ...g }]));
+  if (!picked.size) return go('groups');
+  const sc = S.schedule;
+  const M = await api('/mode').catch(() => ({ mode: S.mode, claude: {}, local: {} }));
+  const opt = (list, cur) => list.map(([v, t]) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${t}</option>`).join('');
+  const often = OFTEN.some(([v]) => v === sc.everyDays) ? OFTEN : [...OFTEN, [sc.everyDays, `every ${sc.everyDays} days`]];
+  const tog = (g, k, text) => `<button class="tog ${g[k] !== false ? 'on' : ''}" data-jid="${esc(g.jid)}" data-k="${k}" aria-pressed="${g[k] !== false}">${text}</button>`;
+  $('#app').innerHTML = `
+    <h2>How it works</h2>
+    <p class="lead">Tap the green words to change them.</p>
+    <p class="sentence">Send a summary <select id="often" aria-label="How often">${opt(often, sc.everyDays)}</select><span id="dayw"> <span id="onw">on</span> <select id="day" aria-label="Day">${opt(DAYS.map((d) => [d, cap(d)]), sc.day)}</select></span> at <input id="time" type="time" value="${esc(sc.time)}" aria-label="Time">, written <select id="mode" aria-label="Written by">${opt(MODES, M.mode || S.mode)}</select>.</p>
+    <div id="modex"></div>
+    ${[...picked.values()].map((g) => `
+      <p class="gname">${esc(g.name)}</p>
+      <div class="toggles">${tog(g, 'post', 'Post in the group')}${S.pin ? tog(g, 'pin', 'Pin it') : ''}${tog(g, 'dm', 'Message each member')}</div>`).join('')}
+    <div id="serr" class="err hidden"></div>
+    <button class="btn wide" id="save">${S.setupDone ? 'Save' : 'Start'}</button>
+    <p class="center" style="margin-top:10px"><button class="btn link" id="back">Back</button></p>`;
+  const paintTogs = () => document.querySelectorAll('.tog').forEach((t) => {
+    const on = picked.get(t.dataset.jid)[t.dataset.k] !== false;
+    t.classList.toggle('on', on);
+    t.setAttribute('aria-pressed', on);
+  });
+  document.querySelectorAll('.tog').forEach((t) => t.onclick = () => {
+    const g = picked.get(t.dataset.jid);
+    g[t.dataset.k] = g[t.dataset.k] === false;
+    if (t.dataset.k === 'post' && g.post === false) g.pin = false;
+    if (t.dataset.k === 'pin' && g.pin) g.post = true;
+    paintTogs();
+  });
+  const dayRow = () => {
+    const n = $('#often').value;
+    $('#dayw').classList.toggle('hidden', n === '1');
+    $('#onw').textContent = n === '7' ? 'on' : 'starting';
+  };
+  const modeRow = () => {
+    const m = $('#mode').value;
+    $('#modex').innerHTML = m === 'claude' && !M.claude.cli && !M.claude.key
+      ? '<input id="key" type="password" placeholder="Paste an Anthropic API key" autocomplete="off"><p class="hint" style="margin-top:8px">Claude Code isn’t on this computer, so Claude needs a key.</p>'
+      : m === 'local' && !M.local.ready ? '<p class="hint center">Local AI is a 2 GB download. It installs when you press Start.</p>' : '';
+  };
+  const fit = () => {
+    if (CSS.supports('field-sizing', 'content')) return;
+    const m = document.createElement('span');
+    m.style.cssText = 'position:absolute;visibility:hidden;white-space:pre';
+    document.body.appendChild(m);
+    document.querySelectorAll('.sentence select, .sentence input').forEach((el) => {
+      m.style.font = getComputedStyle(el).font;
+      m.textContent = el.tagName === 'SELECT' ? el.options[el.selectedIndex].text : el.value;
+      el.style.width = `${m.offsetWidth + 8}px`;
+    });
+    m.remove();
+  };
+  document.querySelectorAll('.sentence select, .sentence input').forEach((el) => el.addEventListener('change', fit));
+  $('#often').onchange = () => { dayRow(); fit(); }; dayRow();
+  $('#mode').onchange = () => { modeRow(); fit(); }; modeRow();
+  fit();
+  $('#back').onclick = () => go(S.setupDone ? 'home' : 'groups');
+  $('#save').onclick = async () => {
+    const btn = $('#save');
+    const mode = $('#mode').value;
+    const body = { mode, video: !!M.local?.video };
+    if ($('#key')) {
+      const key = $('#key').value.trim();
+      if (!key.startsWith('sk-')) return showErr('#serr', 'Paste the API key, or choose “simply”.');
+      body.apiKey = key;
+    }
+    $('#serr').classList.add('hidden');
+    busy(btn);
+    try {
+      await api('/groups', { groups: [...picked.values()] });
+      await api('/schedule', { everyDays: Number($('#often').value), day: $('#day').value, time: $('#time').value });
+      if (mode === 'local' && !M.local.ready) {
+        busy(btn, 'Installing local AI, a few minutes');
+        await api('/install', { local: true });
+        await new Promise((resolve, reject) => {
+          const t = setInterval(async () => {
+            const j = await api('/job').catch(() => null);
+            if (j && !j.running) { clearInterval(t); j.error ? reject(new Error(j.error)) : resolve(); }
+          }, 1000);
+        });
+      }
+      await api('/mode', body);
+      if (!S.setupDone || !/running|paused/.test(S.service)) await api('/start', {});
+      picked = null;
+      await refresh();
+      go('home');
+    } catch (e) {
+      showErr('#serr', e.message);
+      btn.disabled = false;
+      btn.textContent = 'Try again';
+    }
+  };
+}
+
+// ---------- All set ----------
+function waFormat(text) {
+  let h = esc(text);
+  h = h.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  h = h.replace(/(^|[\s(“])\*([^*\n]+)\*/g, '$1<b>$2</b>').replace(/(^|[\s(“])_([^_\n]+)_/g, '$1<i>$2</i>');
+  return h;
+}
+
+function viewHome() {
+  setSteps(0);
+  const running = /running|paused/.test(S.service);
+  $('#app').innerHTML = `
+    <div class="done-mark">${running ? '✓' : '·'}</div>
+    <h2>${running ? 'All set' : 'Paused'}</h2>
+    <p class="lead" style="margin-bottom:4px">${running ? 'Next summary' : 'Nothing will be sent until you start it again.'}</p>
+    ${running ? `<p class="next">${esc(S.nextRun)}</p>` : '<p class="center" style="margin:18px 0 30px"><button class="btn" id="startsvc">Start again</button></p>'}
+    <div class="row">
+      <button class="btn soft" id="runnow">Send now</button>
+      <button class="btn soft" id="prev">Preview</button>
+      <button class="btn soft" id="invite">Invite</button>
+    </div>
+    <div id="out"></div>
+    <p class="links"><button class="btn link" data-go="groups">Change groups</button><button class="btn link" data-go="settings">Change settings</button><button class="btn link" data-go="relink">Change WhatsApp</button></p>`;
+  document.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => {
+    if (b.dataset.go === 'relink') { linkTab = 'qr'; view = 'link'; viewLink(true); return; }
+    picked = null;
+    go(b.dataset.go);
+  });
+  if ($('#startsvc')) $('#startsvc').onclick = async () => { busy($('#startsvc')); try { await api('/start', {}); await refresh(); viewHome(); } catch (e) { $('#out').innerHTML = note(e.message, 'bad'); } };
+  $('#prev').onclick = async () => {
+    $('#out').innerHTML = note('Reading messages');
+    try {
+      const r = await api('/preview');
+      $('#out').innerHTML = r.previews.map((p) => `<p class="pvname">${esc(p.name)}</p><div class="phone"><div class="bubble">${waFormat(p.text)}</div></div>`).join('');
+    } catch (e) { $('#out').innerHTML = note(e.message, 'bad'); }
+  };
+  $('#invite').onclick = () => {
+    const link = `https://wa.me/${S.phone}?text=${encodeURIComponent('!digest join')}`;
+    $('#out').innerHTML = `<div class="qr" style="margin-top:26px"><div class="box" id="qrbox"></div></div><p class="hint center">Anyone in your groups can scan this with their phone camera, then press send. They’ll get each summary as a message.</p>`;
+    lastQr = '';
+    drawQr(link);
+  };
+  $('#runnow').onclick = async () => {
+    if (!confirm(`Send a summary now to ${S.groups.map((g) => g.name).join(' and ')}?`)) return;
+    try { await api('/run', {}); } catch (e) { $('#out').innerHTML = note(e.message, 'bad'); return; }
+    clearInterval(pollTimer);
+    $('#out').innerHTML = note('Sending');
+    pollTimer = setInterval(async () => {
+      await refresh().catch(() => {});
+      const r = S.run;
+      if (r.running) { $('#out').innerHTML = note(r.log[r.log.length - 1] || 'Sending'); return; }
+      clearInterval(pollTimer);
+      const lines = r.log.filter((l) => /: done|failed|rror/.test(l));
+      $('#out').innerHTML = `<p class="note ${r.error ? 'bad' : 'good'}" style="display:block">${lines.map(esc).join('<br>') || 'Sent'}</p>`;
+    }, 1500);
+  };
+}
+
+function showErr(sel, msg) { const el = $(sel); el.textContent = msg; el.classList.remove('hidden'); }
+function localStorageGet(k) { try { return localStorage.getItem('wadigest.' + k) || ''; } catch { return ''; } }
+function localStorageSet(k, v) { try { localStorage.setItem('wadigest.' + k, v); } catch {} }
+
+(async () => {
+  try {
+    await refresh();
+    go(firstIncomplete());
+  } catch (e) {
+    $('#app').innerHTML = `<h2>Can't reach wadigest</h2><p class="lead">Open it again: double-click Start wadigest, or type wadigest in the terminal.</p>`;
+  }
+})();
+</script>
+</body>
+</html>

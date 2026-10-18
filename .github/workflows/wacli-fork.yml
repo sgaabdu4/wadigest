@@ -1,0 +1,57 @@
+# Builds the wadigest fork of wacli (adds `messages pin`) for macOS, Linux and Windows,
+# and attaches the binaries to a GitHub release, so installs don't need Go.
+name: wacli fork
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['wacli-fork/**', '.github/workflows/wacli-fork.yml']
+permissions:
+  contents: write
+concurrency: { group: wacli-fork, cancel-in-progress: false }
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, goos: darwin, goarch: arm64 }
+          - { os: macos-15-intel, goos: darwin, goarch: amd64 }
+          - { os: ubuntu-24.04, goos: linux, goarch: amd64 }
+          - { os: ubuntu-24.04-arm, goos: linux, goarch: arm64 }
+          - { os: windows-2025, goos: windows, goarch: amd64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults: { run: { shell: bash } }
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
+        with: { go-version: '1.27.x', cache: false }
+      - name: Windows C compiler
+        if: matrix.goos == 'windows'
+        uses: msys2/setup-msys2@v2.33.0
+        with: { msystem: UCRT64, install: mingw-w64-ucrt-x86_64-gcc, path-type: inherit }
+      - name: Build
+        run: |
+          [ "${{ matrix.goos }}" = windows ] && export PATH="/c/msys64/ucrt64/bin:$PATH"
+          EXT=""; [ "${{ matrix.goos }}" = windows ] && EXT=".exe"
+          bash wacli-fork/build.sh "dist/wacli${EXT}"
+          cd dist && tar -czf "../wacli-pin_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz" "wacli${EXT}"
+      - uses: actions/upload-artifact@v7.0.2
+        with: { name: 'wacli-pin_${{ matrix.goos }}_${{ matrix.goarch }}', path: 'wacli-pin_*.tar.gz' }
+  release:
+    needs: build
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v8.0.2
+        with: { path: out, merge-multiple: true }
+      - name: Checksums
+        run: cd out && sha256sum *.tar.gz > checksums.txt && cat checksums.txt
+      - uses: softprops/action-gh-release@v3.0.3
+        with:
+          tag_name: wacli-fork-v0.22.0
+          name: wacli fork v0.22.0 (adds messages pin)
+          body: Builds of wacli v0.22.0 with `wacli messages pin` added (see wacli-fork/). The wadigest installers download these.
+          files: out/*
+          overwrite_files: true

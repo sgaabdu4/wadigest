@@ -1,0 +1,8 @@
+node_modules/
+release/
+*.log
+.DS_Store
+.env
+# runtime data lives in ~/.wadigest, never in the repo
+.wadigest/
+wacli-store/
