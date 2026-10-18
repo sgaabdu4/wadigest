@@ -234,3 +234,20 @@ test('anon: several unnamed people read as a count, not "a member and a member"'
   scrubNames(d);
   assert.equal(d.items[0].summary, 'Two members shared photos. Then three members left.');
 });
+
+test('media: photos, videos and voice notes stay out unless ticked; captions count as text', async () => {
+  const { filterMedia } = await import('../src/media.js');
+  const rows = [
+    msg({ MsgID: 'T', Text: 'plain text' }),
+    msg({ MsgID: 'P1', MediaType: 'image', MediaCaption: 'our new office' }),
+    msg({ MsgID: 'P2', MediaType: 'image' }),
+    msg({ MsgID: 'V1', MediaType: 'video' }),
+    msg({ MsgID: 'A1', MediaType: 'audio' }),
+  ];
+  const off = filterMedia(rows, {});
+  assert.deepEqual(off.map((m) => [m.MsgID, m.MediaType, m.Text]), [['T', undefined, 'plain text'], ['P1', '', 'our new office']].map(([a, b, c]) => [a, b ?? off[0].MediaType, c]));
+  const on = filterMedia(rows, { photos: true, videos: true, voice: true }, { A1: 'see you at seven' });
+  assert.deepEqual(on.map((m) => m.MsgID), ['T', 'P1', 'P2', 'V1', 'A1']);
+  assert.equal(on.at(-1).Text, 'see you at seven');
+  assert.equal(filterMedia(rows, { voice: true }).some((m) => m.MsgID === 'A1'), false, 'a voice note with no transcript is left out');
+});

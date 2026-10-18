@@ -11,6 +11,7 @@ import { buildDigest, mergeSummary, readSummaryFile } from './summary.js';
 import { renderGroupPost, renderPersonal } from './format.js';
 import { loadMembers } from './members.js';
 import { processVideos } from './video.js';
+import { filterMedia, transcribeKinds } from './media.js';
 import { summariseWithClaude } from './claude.js';
 import { summariseWithChatGPT } from './chatgpt.js';
 import { summariseWithLocal } from './local.js';
@@ -38,14 +39,16 @@ export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fe
   if (!cfg.group?.jid) throw new Error('No group chosen yet. Run `wadigest setup` or `wadigest config set group "<name>"`.');
   const notes = [];
   const anon = cfg.group.anon === true;
-  const raw = await wacli.listMessages({ chat: cfg.group.jid, after: window.start, before: window.end });
+  const all = await wacli.listMessages({ chat: cfg.group.jid, after: window.start, before: window.end });
+  const kinds = transcribeKinds(cfg.group);
+  if (videos && kinds.length) {
+    const v = await processVideos(wacli, cfg, state, all, { max: 5, kinds });
+    if (v.skipped && all.some((m) => kinds.includes(String(m.MediaType).toLowerCase()))) notes.push(`Videos and voice notes not turned into text (${v.skipped}).`);
+  }
+  const heard = Object.fromEntries(Object.entries(state.videos || {}).filter(([, v]) => v.transcript).map(([id, v]) => [id, v.transcript]));
+  const raw = filterMedia(all, cfg.group, heard);
   const pseudo = pseudonymise(raw);
   const messages = anon ? pseudo.messages : raw;
-
-  if (videos) {
-    const v = await processVideos(wacli, cfg, state, messages, { max: 5 });
-    if (v.skipped && messages.some((m) => String(m.MediaType).toLowerCase() === 'video')) notes.push(`Videos not transcribed (${v.skipped}).`);
-  }
 
   const ranked = rankMessages(messages);
   if (anon) scrubNames(ranked.items);

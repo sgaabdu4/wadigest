@@ -376,6 +376,7 @@ async function viewGroups() {
 
 // ---------- 3. How it works ----------
 const OFTEN = [[1, 'every day'], [2, 'every 2 days'], [3, 'every 3 days'], [7, 'every week'], [14, 'every 2 weeks'], [30, 'every month']];
+const OFF_BY_DEFAULT = ['anon', 'photos', 'videos', 'voice'];
 const MODES = [['digest', 'simply'], ['local', 'with local AI'], ['claude', 'with Claude'], ['chatgpt', 'with ChatGPT']];
 
 async function viewSettings() {
@@ -386,7 +387,7 @@ async function viewSettings() {
   const M = await api('/mode').catch(() => ({ mode: S.mode, claude: {}, local: {} }));
   const opt = (list, cur) => list.map(([v, t]) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${t}</option>`).join('');
   const often = OFTEN.some(([v]) => v === sc.everyDays) ? OFTEN : [...OFTEN, [sc.everyDays, `every ${sc.everyDays} days`]];
-  const isOn = (g, k) => (k === 'anon' ? g.anon === true : g[k] !== false);
+  const isOn = (g, k) => (OFF_BY_DEFAULT.includes(k) ? g[k] === true : g[k] !== false);
   const tog = (g, k, text) => `<button class="tog ${isOn(g, k) ? 'on' : ''}" data-jid="${esc(g.jid)}" data-k="${k}" aria-pressed="${isOn(g, k)}">${text}</button>`;
   $('#app').innerHTML = `
     <h2>How it works</h2>
@@ -395,7 +396,9 @@ async function viewSettings() {
     <div id="modex"></div>
     ${[...picked.values()].map((g) => `
       <p class="gname">${esc(g.name)}</p>
-      <div class="toggles">${tog(g, 'post', 'Post in the group')}${S.pin ? tog(g, 'pin', 'Pin it') : ''}${tog(g, 'dm', 'Message each member')}${tog(g, 'anon', 'Anonymise members')}</div>`).join('')}
+      <div class="toggles">${tog(g, 'post', 'Post in the group')}${S.pin ? tog(g, 'pin', 'Pin it') : ''}${tog(g, 'dm', 'Message each member')}${tog(g, 'anon', 'Anonymise members')}</div>
+      <p class="glbl" style="margin:8px 0 2px">Include in the summary</p>
+      <div class="toggles">${tog(g, 'photos', 'Photos')}${tog(g, 'videos', 'Videos')}${tog(g, 'voice', 'Voice notes')}</div>`).join('')}
     <div id="serr" class="err hidden"></div>
     <button class="btn wide" id="save">${S.setupDone ? 'Save' : 'Start'}</button>
     <p class="center" style="margin-top:10px"><button class="btn link" id="back">Back</button></p>`;
@@ -454,6 +457,17 @@ async function viewSettings() {
       busy(btn, 'Getting recent messages');
       await api('/groups', { groups: [...picked.values()] });
       await api('/schedule', { everyDays: Number($('#often').value), day: $('#day').value, time: $('#time').value });
+      if ([...picked.values()].some((g) => g.videos === true || g.voice === true) && !M.local?.video) {
+        busy(btn, 'Installing speech-to-text, a few minutes');
+        await api('/install', { video: true });
+        await new Promise((resolve, reject) => {
+          const t = setInterval(async () => {
+            const j = await api('/job').catch(() => null);
+            if (j && !j.running) { clearInterval(t); j.error ? reject(new Error(`Speech-to-text did not install: ${j.error}`)) : resolve(); }
+          }, 1000);
+        });
+        body.video = true;
+      }
       if (mode === 'local' && !M.local.ready) {
         busy(btn, 'Installing local AI, a few minutes');
         await api('/install', { local: true });
@@ -490,8 +504,8 @@ function waFormat(text) {
 function viewHome() {
   setSteps(0);
   const running = /running|paused/.test(S.service);
-  const opts = [['post', 'Post in the group'], ...(S.pin ? [['pin', 'Pin it']] : []), ['dm', 'Message each member'], ['anon', 'Anonymise']];
-  const pick = new Map(S.groups.map((g) => [g.jid, { jid: g.jid, name: g.name, on: !g.sentToday, open: false, post: g.post !== false, pin: !!S.pin && g.post !== false && g.pin !== false, dm: g.dm !== false, anon: g.anon === true }]));
+  const opts = [['post', 'Post in the group'], ...(S.pin ? [['pin', 'Pin it']] : []), ['dm', 'Message each member'], ['anon', 'Anonymise'], ['photos', 'Photos'], ['videos', 'Videos'], ['voice', 'Voice notes']];
+  const pick = new Map(S.groups.map((g) => [g.jid, { jid: g.jid, name: g.name, on: !g.sentToday, open: false, post: g.post !== false, pin: !!S.pin && g.post !== false && g.pin !== false, dm: g.dm !== false, anon: g.anon === true, photos: g.photos === true, videos: g.videos === true, voice: g.voice === true }]));
   $('#app').innerHTML = `
     <div class="hcard"><div class="hmark">${running ? '✓' : '·'}</div><div><b>${running ? 'All set' : 'Paused'}</b><span>${running ? `Next summary: ${esc(S.nextRun)}` : 'Nothing will be sent until you start it again.'}</span></div></div>
     ${running ? '' : '<p class="center" style="margin:-6px 0 22px"><button class="btn" id="startsvc">Start again</button></p>'}
@@ -529,7 +543,7 @@ function viewHome() {
   };
   const card = (jid) => document.querySelector(`.gcard[data-jid="${CSS.escape(jid)}"]`);
   const sentToday = new Map(S.groups.map((g) => [g.jid, g.sentToday]));
-  const want = (c) => `${c.anon ? 1 : 0}${c.dm ? 1 : 0}`;
+  const want = (c) => ['anon', 'dm', 'photos', 'videos', 'voice'].map((k) => (c[k] ? 1 : 0)).join('');
   const shown = new Map();
   const asked = new Map();
   let chain = Promise.resolve();
@@ -556,7 +570,7 @@ function viewHome() {
     const poll = async () => {
       for (;;) {
         if (view !== 'home' || want(c) !== k) return null;
-        const r = await api(`/preview?group=${encodeURIComponent(c.jid)}&anon=${c.anon ? 1 : 0}&dm=${c.dm ? 1 : 0}`);
+        const r = await api(`/preview?group=${encodeURIComponent(c.jid)}${['anon', 'dm', 'photos', 'videos', 'voice'].map((k) => `&${k}=${c[k] ? 1 : 0}`).join('')}`);
         if (!r.pending) return r;
         await new Promise((ok) => setTimeout(ok, 2000));
       }
@@ -573,7 +587,7 @@ function viewHome() {
       const el = card(c.jid);
       el.classList.toggle('on', c.on);
       el.querySelector('input').checked = c.on;
-      const chips = [c.post && 'Post', c.post && c.pin && 'Pin', c.dm && 'Message members', c.anon && 'Names hidden'].filter(Boolean);
+      const chips = [c.post && 'Post', c.post && c.pin && 'Pin', c.dm && 'Message members', c.anon && 'Names hidden', c.photos && 'Photos', c.videos && 'Videos', c.voice && 'Voice notes'].filter(Boolean);
       el.querySelector('.chips').innerHTML = (chips.length ? chips : ['Nothing switched on']).map((t) => `<span class="chip">${t}</span>`).join('')
         + (sentToday.get(c.jid) ? `<span class="chip grey">Sent today ${esc(sentToday.get(c.jid))}</span>` : '');
       el.querySelector('.gbody').classList.toggle('hidden', !c.open);
@@ -595,7 +609,7 @@ function viewHome() {
     if (k === 'pin' && c.pin) c.post = true;
     paint();
   });
-  $('#sendgo').onclick = () => sendNow([...pick.values()].filter((c) => c.on).map(({ jid, post, pin, dm, anon }) => ({ jid, post, pin, dm, anon })));
+  $('#sendgo').onclick = () => sendNow([...pick.values()].filter((c) => c.on).map(({ jid, post, pin, dm, anon, photos, videos, voice }) => ({ jid, post, pin, dm, anon, photos, videos, voice })));
   const sendNow = async (groups) => {
     if (!groups.length) return showErr('#senderr', 'Tick at least one group.');
     $('#sendgo').disabled = true;

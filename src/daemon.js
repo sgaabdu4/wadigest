@@ -10,6 +10,7 @@ import { loadMembers, saveMembers, findMember, addGroups } from './members.js';
 import { decide, windowFor, readDays } from './schedule.js';
 import { prepareDigest, deliver } from './pipeline.js';
 import { processVideos } from './video.js';
+import { transcribeKinds } from './media.js';
 import { log, setConsoleLogging } from './log.js';
 import { isGroupJid, isPersonJid, jidUser, sleep } from './util.js';
 
@@ -228,8 +229,10 @@ export async function runDaemon({ once = false } = {}) {
       if (cfg.groups.length && now - lastVideoRun > VIDEO_EVERY_MS) {
         lastVideoRun = now;
         for (const g of cfg.groups) {
+          const kinds = transcribeKinds(g);
+          if (!kinds.length) continue;
           const msgs = await wacli.listMessages({ chat: g.jid, after: new Date(now - readDays(cfg.schedule) * 864e5) });
-          await processVideos(wacli, cfg, state, msgs, { max: 5 });
+          await processVideos(wacli, cfg, state, msgs, { max: 5, kinds });
         }
         saveState(state);
       }

@@ -76,8 +76,8 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
   // Send now reuses what Preview just built, so the AI doesn't write the summary twice.
   const previews = new Map();
   const building = new Map();
-  const previewKey = (g) => `${g.jid}|${g.anon === true}`;
-  const previewSig = (c, g) => JSON.stringify([g.jid, g.anon === true, g.addedAt, c.mode, c.local, c.claude, c.schedule, c.topN, c.linkTitles]);
+  const previewKey = (g) => `${g.jid}|${['anon', 'photos', 'videos', 'voice'].map((k) => (g[k] === true ? 1 : 0)).join('')}`;
+  const previewSig = (c, g) => JSON.stringify([previewKey(g), g.addedAt, c.mode, c.local, c.claude, c.schedule, c.topN, c.linkTitles]);
   const cachedPreview = (c, g) => {
     const p = previews.get(previewKey(g));
     return p && Date.now() - p.at < 30 * 60_000 && p.sig === previewSig(c, g) ? p : null;
@@ -233,7 +233,7 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
         for (const p of Array.isArray(body.groups) ? body.groups : []) {
           const g = known.find((x) => x.jid === p.jid);
           if (!g) return send(res, 400, { error: `"${p.name || 'A group'}" isn't on this WhatsApp any more. Search again.` });
-          picked.push({ jid: g.jid, name: g.name, post: p.post, pin: p.pin, dm: p.dm, anon: p.anon });
+          picked.push({ jid: g.jid, name: g.name, post: p.post, pin: p.pin, dm: p.dm, anon: p.anon, photos: p.photos, videos: p.videos, voice: p.voice });
         }
         if (!picked.length) return send(res, 400, { error: 'Pick at least one group.' });
         setGroups(loadConfig(), picked);
@@ -325,7 +325,7 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
         const out = [];
         const one = url.searchParams.get('group');
         const flag = (k) => (url.searchParams.has(k) ? url.searchParams.get(k) === '1' : undefined);
-        const list = one ? c.groups.filter((g) => g.jid === one).map((g) => ({ ...g, ...(flag('anon') !== undefined && { anon: flag('anon') }), ...(flag('dm') !== undefined && { dm: flag('dm') }) })) : c.groups;
+        const list = one ? c.groups.filter((g) => g.jid === one).map((g) => ({ ...g, ...(flag('anon') !== undefined && { anon: flag('anon') }), ...(flag('dm') !== undefined && { dm: flag('dm') }), ...Object.fromEntries(['photos', 'videos', 'voice'].filter((k) => flag(k) !== undefined).map((k) => [k, flag(k)])) })) : c.groups;
         if (!list.length) return send(res, 400, { error: 'That group is not in your list.' });
         const build = async (g) => {
           const { digest, messages, notes } = await prepareDigest({ cfg: groupConfig(c, g), state, wacli: new Wacli(c), window: rollingWindow(new Date(), readDays(c.schedule)), videos: false });
@@ -359,7 +359,7 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
         const groups = Array.isArray(body.groups)
           ? body.groups.map((x) => {
             const saved = c.groups.find((g) => g.jid === (typeof x === 'string' ? x : x?.jid));
-            return saved && (typeof x === 'string' ? saved : { ...saved, post: !!x.post, pin: !!x.pin && !!x.post, dm: !!x.dm, anon: !!x.anon });
+            return saved && (typeof x === 'string' ? saved : { ...saved, post: !!x.post, pin: !!x.pin && !!x.post, dm: !!x.dm, anon: !!x.anon, photos: !!x.photos, videos: !!x.videos, voice: !!x.voice });
           }).filter(Boolean)
           : c.groups;
         if (!groups.length) return send(res, 400, { error: 'Pick at least one group to send to.' });

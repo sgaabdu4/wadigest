@@ -85,11 +85,11 @@ export async function transcribeVideo(wacli, chatJid, msgId, tools) {
 }
 
 /** Transcribe any not-yet-seen videos among `messages`. Records results in state.videos. */
-export async function processVideos(wacli, cfg, state, messages, { max = 5 } = {}) {
+export async function processVideos(wacli, cfg, state, messages, { max = 5, kinds = ['video'] } = {}) {
   const status = await videoEnabled(cfg);
   if (!status.on) return { processed: 0, skipped: status.why };
   state.videos ||= {};
-  const todo = messages.filter((m) => String(m.MediaType).toLowerCase() === 'video' && !m.Revoked && !state.videos[m.MsgID]).slice(-max);
+  const todo = messages.filter((m) => kinds.includes(String(m.MediaType).toLowerCase()) && !m.Revoked && !state.videos[m.MsgID]).slice(-max);
   let processed = 0;
   for (const m of todo) {
     try {

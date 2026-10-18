@@ -8,7 +8,7 @@ export function setGroups(cfg, picked) {
   const before = new Map((cfg.groups || []).map((g) => [g.jid, g]));
   cfg.groups = picked.filter((g) => g?.jid).map((g) => {
     const old = before.get(g.jid);
-    const sw = Object.fromEntries(['post', 'pin', 'dm', 'anon'].filter((k) => typeof g[k] === 'boolean').map((k) => [k, g[k]]));
+    const sw = Object.fromEntries(['post', 'pin', 'dm', 'anon', 'photos', 'videos', 'voice'].filter((k) => typeof g[k] === 'boolean').map((k) => [k, g[k]]));
     return old ? { ...old, name: g.name || old.name, ...sw } : newGroup(g, sw);
   });
   saveConfig(cfg);

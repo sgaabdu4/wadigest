@@ -31,7 +31,7 @@ export function buildTranscript(messages, { timeZone, linkInfo = new Map(), tran
     const type = String(m.MediaType || '').toLowerCase();
     let text = msgText(m).replace(/\s+/g, ' ');
     if (type && type !== 'text') text = `[${type}] ${text}`.trim();
-    if (transcripts[m.MsgID]) text += ` (video says: “${truncate(transcripts[m.MsgID], 600)}”)`;
+    if (type === 'video' && transcripts[m.MsgID]) text += ` (video says: “${truncate(transcripts[m.MsgID], 600)}”)`;
     for (const url of extractUrls(text)) {
       const page = linkInfo.get(canonicalUrl(url));
       if (page) text += ` (page “${truncate(page.title, 100)}”: ${truncate(page.text, 400)})`;

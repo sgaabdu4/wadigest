@@ -59,6 +59,7 @@ For every group you can switch these on or off:
 | **Pin it** | The post is pinned for 7 days, so it stays at the top When the next summary is pinned, the old one is unpinned. |
 | **Message each member** | Everyone in that group gets their own copy by private message, with their interests first ⭐. The copies are then deleted from your own chats ("delete for me"), so your feed stays clear. |
 | **Anonymise members** | The summary shows no names. Each person becomes "a member". This is off by default. |
+| **Photos**, **Videos**, **Voice notes** | Off by default, so the summary skips them. A photo or video with a caption still counts as text. Tick Videos or Voice notes to turn them into text on your computer first (speech-to-text installs when you press Save, about 150 MB). |
 
 Members can reply to wadigest by private message, or send in the group:
 
