@@ -73,6 +73,13 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
     const c = loadConfig();
     if (!c.setupDone && installerDone() && LLAMA_BUILDS[platformKey()] && !localReady(c)) prefetchLocal();
   };
+  // Send now reuses what Preview just built, so the AI doesn't write the summary twice.
+  const previews = new Map();
+  const previewSig = (c, g) => JSON.stringify([groupConfig(c, g), c.mode, c.local, c.claude, c.schedule]);
+  const cachedPreview = (c, g) => {
+    const p = previews.get(g.jid);
+    return p && Date.now() - p.at < 30 * 60_000 && p.sig === previewSig(c, g) ? p : null;
+  };
   let groupsCache = null;
   let refreshed = false;
 
@@ -310,8 +317,13 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
         const out = [];
         for (const g of c.groups) {
           const gc = groupConfig(c, g);
-          const { digest, messages } = await prepareDigest({ cfg: gc, state, wacli: new Wacli(c), window: rollingWindow(new Date(), readDays(c.schedule)), videos: false });
-          out.push({ name: g.name, messages, text: renderGroupPost(digest, { timeZone: c.schedule.timezone, audience: gc.dms.audience }) });
+          let p = url.searchParams.get('fresh') ? null : cachedPreview(c, g);
+          if (!p) {
+            const { digest, messages, notes } = await prepareDigest({ cfg: gc, state, wacli: new Wacli(c), window: rollingWindow(new Date(), readDays(c.schedule)), videos: false });
+            p = { at: Date.now(), sig: previewSig(c, g), prepared: { digest, messages, notes } };
+            previews.set(g.jid, p);
+          }
+          out.push({ name: g.name, messages: p.prepared.messages, text: renderGroupPost(p.prepared.digest, { timeZone: c.schedule.timezone, audience: gc.dms.audience }) });
         }
         return send(res, 200, { previews: out });
       }
@@ -327,10 +339,12 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
           const state = loadState();
           for (const g of c.groups) {
             try {
-              run.log.push(`${g.name}: reading messages`);
               const onProgress = (t) => run.log.push(`${g.name}: ${t}`);
               let n = 0;
-              const r = await runGroupNow({ cfg: c, group: g, state, wacli: new Wacli(c), onProgress, onDm: (m, ok) => run.log.push(`${g.name}: ${ok ? 'sent' : 'could not send'} private message ${++n}`) });
+              const prepared = cachedPreview(c, g)?.prepared;
+              run.log.push(`${g.name}: ${prepared ? 'sending the summary you previewed' : 'reading messages'}`);
+              previews.delete(g.jid);
+              const r = await runGroupNow({ cfg: c, group: g, state, wacli: new Wacli(c), onProgress, prepared, onDm: (m, ok) => run.log.push(`${g.name}: ${ok ? 'sent' : 'could not send'} private message ${++n}`) });
               run.log.push(`${g.name}: done${r.group ? ', posted' : ''}${r.pinned ? ' and pinned' : ''}${g.dm !== false ? `, ${r.dms.filter((d) => d.ok).length} DMs sent` : ''}`);
             } catch (e) { run.error = `${g.name}: ${e.message}`; run.log.push(run.error); }
             run.done++;

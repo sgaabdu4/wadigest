@@ -208,10 +208,10 @@ export async function deliver({ cfg, state, wacli, digest, key, noGroup = false,
 }
 
 /** Build and send one group's digest right now (the "Run now" button / `wadigest run`). */
-export async function runGroupNow({ cfg, group, state, wacli, pauseSync, onDm, onProgress = () => {} }) {
+export async function runGroupNow({ cfg, group, state, wacli, pauseSync, onDm, prepared, onProgress = () => {} }) {
   const gc = groupConfig(cfg, group);
   const window = rollingWindow(new Date(), readDays(cfg.schedule));
-  const { digest, messages, notes } = await prepareDigest({ cfg: gc, state, wacli, window, onProgress });
+  const { digest, messages, notes } = prepared || await prepareDigest({ cfg: gc, state, wacli, window, onProgress });
   onProgress(`sending (${messages} messages read)`);
   saveState(state);
   const key = gc.post ? `manual|${group.jid}|${Date.now()}` : null;

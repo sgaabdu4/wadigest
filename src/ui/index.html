@@ -465,7 +465,6 @@ function viewHome() {
     ${running ? `<p class="next">${esc(S.nextRun)}</p>` : '<p class="center" style="margin:18px 0 30px"><button class="btn" id="startsvc">Start again</button></p>'}
     <div class="row">
       <button class="btn soft" id="runnow">Send now</button>
-      <button class="btn soft" id="prev">Preview</button>
       <button class="btn soft" id="invite">Invite</button>
     </div>
     <div id="out"></div>
@@ -476,15 +475,21 @@ function viewHome() {
     go(b.dataset.go);
   });
   if ($('#startsvc')) $('#startsvc').onclick = async () => { busy($('#startsvc')); try { await api('/start', {}); await refresh(); viewHome(); } catch (e) { $('#out').innerHTML = note(e.message, 'bad'); } };
-  $('#prev').onclick = async () => {
+  let previewSeq = 0;
+  const loadPreview = async (fresh) => {
+    const seq = ++previewSeq;
     waiting($('#out'), S.mode === 'digest' ? 'Reading messages' : 'Reading every message and writing the summary', S.mode === 'digest' ? '' : 'This usually takes a minute or two. Nothing is sent.');
     try {
-      const r = await api('/preview');
+      const r = await api(fresh ? '/preview?fresh=1' : '/preview');
+      if (seq !== previewSeq || view !== 'home') return;
       clearInterval(tickTimer);
-      $('#out').innerHTML = r.previews.map((p) => `<p class="pvname">${esc(p.name)}</p><div class="phone"><div class="bubble">${waFormat(p.text)}</div></div>`).join('');
-    } catch (e) { $('#out').innerHTML = note(e.message, 'bad'); }
+      $('#out').innerHTML = r.previews.map((p) => `<p class="pvname">${esc(p.name)}</p><div class="phone"><div class="bubble">${waFormat(p.text)}</div></div>`).join('') + '<p class="center"><button class="btn link" id="reprev">Refresh</button></p>';
+      $('#reprev').onclick = () => loadPreview(true);
+    } catch (e) { if (seq === previewSeq) $('#out').innerHTML = note(e.message, 'bad'); }
   };
   $('#invite').onclick = () => {
+    previewSeq++;
+    clearInterval(tickTimer);
     const link = `https://wa.me/${S.phone}?text=${encodeURIComponent('!digest join')}`;
     $('#out').innerHTML = `<div class="qr" style="margin-top:26px"><div class="box" id="qrbox"></div></div><p class="hint center">Anyone in your groups can scan this with their phone camera, then press send. They’ll get each summary as a message.</p>`;
     lastQr = '';
@@ -492,6 +497,7 @@ function viewHome() {
   };
   $('#runnow').onclick = async () => {
     if (!confirm(`Send a summary now to ${S.groups.map((g) => g.name).join(' and ')}?`)) return;
+    previewSeq++;
     try { await api('/run', {}); } catch (e) { $('#out').innerHTML = note(e.message, 'bad'); return; }
     clearInterval(pollTimer);
     const say = waiting($('#out'), 'Starting', 'This takes a few minutes. Private messages go out slowly on purpose, so WhatsApp stays happy.');
@@ -505,6 +511,7 @@ function viewHome() {
       $('#out').innerHTML = `<p class="note ${r.error ? 'bad' : 'good'}" style="display:block">${lines.map(esc).join('<br>') || 'Sent'}</p>`;
     }, 1500);
   };
+  if (!S.run?.running) loadPreview(false);
 }
 
 function showErr(sel, msg) { const el = $(sel); el.textContent = msg; el.classList.remove('hidden'); }
