@@ -44,11 +44,19 @@ export function pseudonymise(messages) {
   };
 }
 
+const COUNT = ['Two', 'Three', 'Four', 'Five', 'Six'];
+const MANY = /\b([aA]) member((?:, a member)*),? and a member\b/g;
+
 const swapText = (s, names) => s
   .replace(LABEL, (_, pre, n, at) => {
     const who = (names && names.get(`Member ${n}`)) || '';
     const word = who || (pre || at === 0 ? 'A member' : 'a member');
     return `${pre || ''}${word}`;
+  })
+  .replace(MANY, (_, a, more) => {
+    const n = 2 + (more.match(/, a member/g) || []).length;
+    const word = `${COUNT[n - 2] || 'Several'} members`;
+    return a === 'A' ? word : word.toLowerCase();
   })
   .replace(MENTION, 'someone');
 

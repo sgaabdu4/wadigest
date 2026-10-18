@@ -228,3 +228,9 @@ test('pseudonymise: the AI gets labels only; names typed in messages and @mentio
   assert.equal(written.items[0].summary, 'Aisha Khan asked Sam Jones to book Sadaf. Tom asked about the time.');
   assert.equal(written.items[0].sharedBy, 'Aisha Khan');
 });
+
+test('anon: several unnamed people read as a count, not "a member and a member"', () => {
+  const d = { items: [{ summary: 'Member 1 and Member 2 shared photos. Then Member 1, Member 2 and Member 3 left.' }] };
+  scrubNames(d);
+  assert.equal(d.items[0].summary, 'Two members shared photos. Then three members left.');
+});

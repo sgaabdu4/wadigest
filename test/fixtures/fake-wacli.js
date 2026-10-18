@@ -78,7 +78,7 @@ else switch (cmd) {
     break;
   }
   case 'messages pin':
-    fs.appendFileSync(path.join(dir, 'sent.jsonl'), JSON.stringify({ pin: flags.id, chat: flags.chat, duration: flags.duration }) + '\n');
+    fs.appendFileSync(path.join(dir, 'sent.jsonl'), JSON.stringify({ pin: flags.id, chat: flags.chat, duration: flags.duration, ...(flags.unpin && { unpin: true }) }) + '\n');
     out({ pinned: true, chat: flags.chat, id: flags.id, pin_id: 'PIN1', duration_secs: 604800 });
     break;
   case 'sync':

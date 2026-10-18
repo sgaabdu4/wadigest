@@ -88,17 +88,35 @@
   .bubble { background: var(--bubble); color: var(--ink); border-radius: 14px 14px 4px 14px; padding: 12px 14px; font-size: 14.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
   .bubble a { color: var(--sage-2); }
   .pvname { font-size: 13px; color: var(--ink-3); margin: 22px 0 0; text-align: center; }
-  details.pv { margin-top: 14px; }
-  details.pv > summary { cursor: pointer; list-style: none; text-align: center; font-size: 14px; color: var(--sage-2); padding: 6px 0; }
-  details.pv > summary::-webkit-details-marker { display: none; }
-  details.pv > summary::before { content: "▸ "; }
-  details.pv[open] > summary::before { content: "▾ "; }
-  details.pv > .phone { margin-top: 8px; }
-  .sendg { margin: 0 0 12px 36px; }
-  .sendg .gsum { margin: 0; text-align: left; }
-  .sendg details.pv { margin-top: 4px; }
-  .sendg details.pv > summary { text-align: left; }
-  .sendg .toggles { margin: 6px 0 2px; }
+  .hcard { display: flex; align-items: center; gap: 14px; background: var(--card); border-radius: 18px; padding: 14px 16px; margin: 0 0 24px; }
+  .hmark { width: 40px; height: 40px; border-radius: 50%; background: var(--sage-soft); color: var(--sage); display: grid; place-items: center; font-size: 18px; flex: none; }
+  .hcard b { display: block; font: 400 20px/1.2 var(--serif); }
+  .hcard span { font-size: 14.5px; color: var(--ink-2); }
+  .hgroups { font: 400 23px/1.2 var(--serif); margin: 0 0 4px; }
+  .gcard { background: var(--card); border: 1px solid var(--line); border-radius: 18px; margin-bottom: 12px; overflow: hidden; transition: border-color .2s; }
+  .gcard.on { border-color: #c9d6cc; }
+  .ghead { display: flex; align-items: center; gap: 12px; padding: 14px 14px 14px 16px; }
+  .gtick { flex: none; cursor: pointer; display: grid; }
+  .gtick input { position: absolute; opacity: 0; pointer-events: none; }
+  .gtick .box { width: 24px; height: 24px; border-radius: 7px; border: 1.5px solid var(--line-2); display: grid; place-items: center; color: #fff; font-size: 13px; transition: background .2s, border-color .2s; }
+  .gtick input:checked + .box { background: var(--sage); border-color: var(--sage); }
+  .gtick input:checked + .box::after { content: "✓"; }
+  .gtick input:focus-visible + .box { outline: 2px solid var(--sage); outline-offset: 2px; }
+  .gname { flex: 1; min-width: 0; }
+  .gname b { display: block; color: var(--ink); font-weight: 600; font-size: 16px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+  .chip { font-size: 12px; line-height: 1.6; padding: 1px 9px; border-radius: 99px; background: var(--sage-soft); color: var(--sage-2); }
+  .chip.grey { background: #f0ede6; color: var(--ink-2); }
+  .pvbtn { appearance: none; flex: none; font: inherit; font-size: 14px; border: 1px solid var(--line-2); border-radius: 99px; padding: 7px 15px; background: none; color: var(--ink); cursor: pointer; }
+  .pvbtn:hover { border-color: var(--sage); color: var(--sage); }
+  .pvbtn.open { background: var(--sage); border-color: var(--sage); color: #fff; }
+  .gbody { border-top: 1px solid var(--line); padding: 12px 16px 16px; background: #fbfaf7; }
+  .glbl { font-size: 12px; color: var(--ink-3); margin: 0 0 8px; }
+  .gtogs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .gt { appearance: none; font: inherit; font-size: 13px; padding: 5px 11px; border-radius: 99px; border: 1px solid var(--line-2); color: var(--ink-2); background: #fff; cursor: pointer; }
+  .gt.on { background: var(--sage-soft); border-color: #c9d6cc; color: var(--sage-2); }
+  .gt.on::before { content: "✓ "; }
+  .gbody .bubble { max-height: 460px; overflow: auto; }
   details.more { margin-top: 26px; color: var(--ink-3); font-size: 13px; text-align: center; }
   details.more summary { cursor: pointer; }
   .log { font-family: var(--mono); font-size: 12px; text-align: left; background: var(--card); border-radius: 12px; padding: 10px 12px; max-height: 160px; overflow: auto; white-space: pre-wrap; margin-top: 10px; }
@@ -470,23 +488,30 @@ function waFormat(text) {
 function viewHome() {
   setSteps(0);
   const running = /running|paused/.test(S.service);
-  const opts = [['post', 'Post in the group'], ...(S.pin ? [['pin', 'Pin it']] : []), ['dm', 'Message each member'], ['anon', 'Anonymise members']];
-  const pick = new Map(S.groups.map((g) => [g.jid, { jid: g.jid, on: !g.sentToday, post: g.post !== false, pin: !!S.pin && g.post !== false && g.pin !== false, dm: g.dm !== false, anon: g.anon === true }]));
+  const opts = [['post', 'Post in the group'], ...(S.pin ? [['pin', 'Pin it']] : []), ['dm', 'Message each member'], ['anon', 'Anonymise']];
+  const pick = new Map(S.groups.map((g) => [g.jid, { jid: g.jid, name: g.name, on: !g.sentToday, open: false, post: g.post !== false, pin: !!S.pin && g.post !== false && g.pin !== false, dm: g.dm !== false, anon: g.anon === true }]));
   $('#app').innerHTML = `
-    <div class="done-mark">${running ? '✓' : '·'}</div>
-    <h2>${running ? 'All set' : 'Paused'}</h2>
-    <p class="lead" style="margin-bottom:4px">${running ? 'Next summary' : 'Nothing will be sent until you start it again.'}</p>
-    ${running ? `<p class="next">${esc(S.nextRun)}</p>` : '<p class="center" style="margin:18px 0 30px"><button class="btn" id="startsvc">Start again</button></p>'}
-    <p class="pvname">Your groups. Tick the ones to send to now. Each Sunday summary still goes to all of them.</p>
+    <div class="hcard"><div class="hmark">${running ? '✓' : '·'}</div><div><b>${running ? 'All set' : 'Paused'}</b><span>${running ? `Next summary: ${esc(S.nextRun)}` : 'Nothing will be sent until you start it again.'}</span></div></div>
+    ${running ? '' : '<p class="center" style="margin:-6px 0 22px"><button class="btn" id="startsvc">Start again</button></p>'}
+    <h3 class="hgroups">Your groups</h3>
+    <p class="hint" style="margin-bottom:14px">Tick a group to send it now. Sunday's summary goes to all of them.</p>
     <div id="sendlist">${S.groups.map((g) => `
-      <label class="grow"><input type="checkbox" data-jid="${esc(g.jid)}" ${pick.get(g.jid).on ? 'checked' : ''}><span class="tick"></span><span>${esc(g.name)}${g.sentToday ? ` <span class="hint">(already sent today at ${esc(g.sentToday)})</span>` : ''}</span></label>
-      <div class="sendg" data-jid="${esc(g.jid)}"><p class="hint gsum"></p>
-      <details class="pv"><summary>Preview</summary><div class="toggles">${opts.map(([k, t]) => `<button class="tog" data-jid="${esc(g.jid)}" data-k="${k}">${t}</button>`).join('')}</div>
-      <p class="hint">These choices are for sending now only.</p><div class="phone"><div class="bubble"></div></div></details></div>`).join('')}</div>
+      <div class="gcard" data-jid="${esc(g.jid)}">
+        <div class="ghead">
+          <label class="gtick"><input type="checkbox" data-jid="${esc(g.jid)}" aria-label="Send ${esc(g.name)} now"><span class="box"></span></label>
+          <div class="gname"><b>${esc(g.name)}</b><div class="chips"></div></div>
+          <button class="pvbtn" data-jid="${esc(g.jid)}">Preview</button>
+        </div>
+        <div class="gbody hidden">
+          <p class="glbl">For this send only</p>
+          <div class="gtogs">${opts.map(([k, t]) => `<button class="gt" data-jid="${esc(g.jid)}" data-k="${k}">${t}</button>`).join('')}</div>
+          <div class="bubble"></div>
+        </div>
+      </div>`).join('')}</div>
     <div id="senderr" class="err hidden"></div>
-    <button class="btn wide" id="sendgo" style="margin-top:18px" disabled>Send</button>
+    <button class="btn wide" id="sendgo" style="margin-top:6px" disabled>Send</button>
     <div id="out"></div>
-    <p class="links"><button class="btn link" id="invite">Invite</button><button class="btn link" data-go="groups">Change groups</button><button class="btn link" data-go="settings">Change settings</button><button class="btn link" data-go="relink">Change WhatsApp</button></p>`;
+    <p class="links"><button class="btn link" id="invite">Invite</button><button class="btn link" data-go="groups">Change groups</button><button class="btn link" data-go="settings">Settings</button><button class="btn link" data-go="relink">WhatsApp</button></p>`;
   document.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => {
     if (b.dataset.go === 'relink') { linkTab = 'qr'; view = 'link'; viewLink(true); return; }
     picked = null;
@@ -500,7 +525,8 @@ function viewHome() {
     lastQr = '';
     drawQr(link);
   };
-  const box = (jid) => document.querySelector(`.sendg[data-jid="${CSS.escape(jid)}"]`);
+  const card = (jid) => document.querySelector(`.gcard[data-jid="${CSS.escape(jid)}"]`);
+  const sentToday = new Map(S.groups.map((g) => [g.jid, g.sentToday]));
   const want = (c) => `${c.anon ? 1 : 0}${c.dm ? 1 : 0}`;
   const shown = new Map();
   const asked = new Map();
@@ -510,17 +536,18 @@ function viewHome() {
     const missing = on.filter((c) => shown.get(c.jid) !== want(c));
     const empty = on.some((c) => !c.post && !c.dm);
     $('#sendgo').disabled = !on.length || empty || missing.length > 0 || !!S.run?.running;
-    $('#sendgo').textContent = !on.length ? 'Tick a group to send to'
+    $('#sendgo').textContent = !on.length ? 'Tick a group to send it'
       : empty ? 'Each group needs Post or Message'
-        : missing.length ? `Open the preview of ${missing.length === 1 ? 'the ticked group' : `all ${missing.length} ticked groups`} first`
-          : `Send to ${on.length} group${on.length > 1 ? 's' : ''}`;
+        : missing.length === 1 ? `Preview ${missing[0].name} to send`
+          : missing.length ? `Preview the ${missing.length} ticked groups to send`
+            : `Send to ${on.length} group${on.length > 1 ? 's' : ''}`;
   };
   const fetchPreview = (c) => {
     const k = want(c);
     if (asked.get(c.jid) === k) return;
     asked.set(c.jid, k);
-    const el = box(c.jid).querySelector('.bubble');
-    el.innerHTML = `<span class="spin"></span>${S.mode === 'digest' ? 'Reading messages…' : 'Reading every message and writing the summary. This usually takes a minute or two.'}`;
+    const el = card(c.jid).querySelector('.bubble');
+    el.innerHTML = `<span class="spin"></span>Generating the preview…${S.mode === 'digest' ? '' : ' The AI reads every message, so this usually takes a minute or two. Nothing is sent.'}`;
     chain = chain.then(() => (view === 'home' && want(c) === k ? api(`/preview?group=${encodeURIComponent(c.jid)}&anon=${c.anon ? 1 : 0}&dm=${c.dm ? 1 : 0}`) : null)).then((r) => {
       if (!r || view !== 'home' || want(c) !== k) return;
       el.innerHTML = waFormat(r.previews[0].text);
@@ -530,16 +557,24 @@ function viewHome() {
   };
   const paint = () => {
     for (const c of pick.values()) {
-      const b = box(c.jid);
-      b.querySelector('.gsum').textContent = [c.post && 'Post', c.post && c.pin && 'pin', c.dm && 'message members', c.anon && 'names hidden'].filter(Boolean).join(', ').replace(/^./, (x) => x.toUpperCase()) || 'Nothing switched on';
-      b.querySelectorAll('.tog').forEach((t) => { t.classList.toggle('on', !!c[t.dataset.k]); t.setAttribute('aria-pressed', !!c[t.dataset.k]); });
-      if (b.querySelector('details').open && shown.get(c.jid) !== want(c)) fetchPreview(c);
+      const el = card(c.jid);
+      el.classList.toggle('on', c.on);
+      el.querySelector('input').checked = c.on;
+      const chips = [c.post && 'Post', c.post && c.pin && 'Pin', c.dm && 'Message members', c.anon && 'Names hidden'].filter(Boolean);
+      el.querySelector('.chips').innerHTML = (chips.length ? chips : ['Nothing switched on']).map((t) => `<span class="chip">${t}</span>`).join('')
+        + (sentToday.get(c.jid) ? `<span class="chip grey">Sent today ${esc(sentToday.get(c.jid))}</span>` : '');
+      el.querySelector('.gbody').classList.toggle('hidden', !c.open);
+      const pb = el.querySelector('.pvbtn');
+      pb.textContent = c.open ? 'Hide' : 'Preview';
+      pb.classList.toggle('open', c.open);
+      el.querySelectorAll('.gt').forEach((t) => { t.classList.toggle('on', !!c[t.dataset.k]); t.setAttribute('aria-pressed', !!c[t.dataset.k]); });
+      if (c.open && shown.get(c.jid) !== want(c)) fetchPreview(c);
     }
     refreshGo();
   };
-  document.querySelectorAll('#sendlist details').forEach((d) => d.ontoggle = () => { if (d.open) paint(); });
   document.querySelectorAll('#sendlist input').forEach((i) => i.onchange = () => { pick.get(i.dataset.jid).on = i.checked; paint(); });
-  document.querySelectorAll('#sendlist .tog').forEach((t) => t.onclick = () => {
+  document.querySelectorAll('#sendlist .pvbtn').forEach((b) => b.onclick = () => { const c = pick.get(b.dataset.jid); c.open = !c.open; paint(); });
+  document.querySelectorAll('#sendlist .gt').forEach((t) => t.onclick = () => {
     const c = pick.get(t.dataset.jid);
     const k = t.dataset.k;
     c[k] = !c[k];

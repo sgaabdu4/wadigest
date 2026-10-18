@@ -174,6 +174,18 @@ export async function deliver({ cfg, state, wacli, digest, key, noGroup = false,
           result.pinNote = 'this wacli can’t pin messages (run the installer to build the wadigest wacli)';
         }
         if (result.pinned) log.info(`Pinned the digest for ${cfg.pin?.duration || '7d'}`);
+        if (result.pinned && !cfg.pin?.command) {
+          // Only the newest summary stays pinned in each group.
+          const jid = cfg.group.jid;
+          for (const [k, v] of Object.entries(state.posted)) {
+            if (k === key || !v?.pinned || !v.groupMessageId || !(k.startsWith(`${jid}|`) || k.startsWith(`manual|${jid}|`))) continue;
+            try {
+              await pauseSync(() => wacli.unpin(jid, v.groupMessageId));
+              v.pinned = false;
+              log.info(`Unpinned the previous digest (id ${v.groupMessageId})`);
+            } catch (err) { log.warn(`Could not unpin the previous digest (id ${v.groupMessageId}): ${err.message}`); }
+          }
+        }
       } catch (err) {
         result.pinNote = err.message;
         log.warn(`Pin failed (in groups where only admins can pin, the linked number must be an admin): ${err.message}`);

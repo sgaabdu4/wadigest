@@ -282,3 +282,19 @@ test('setup page: the Anonymise members tick is saved with the group', async () 
     delete process.env.WADIGEST_FAKE_SERVICE;
   }
 });
+
+test('a new summary unpins the group\'s previous one', async () => {
+  const box = sandbox({ messages: weekOfMessages(30) });
+  const gc = setupCfg();
+  const state = loadState();
+  const c = loadConfig();
+  await runGroupNow({ cfg: c, group: c.groups[0], state, wacli: new Wacli(c) });
+  await runGroupNow({ cfg: c, group: c.groups[0], state, wacli: new Wacli(c) });
+  const sent = box.sent();
+  const posts = sent.filter((x) => x.to === GROUP && x.message).map((x) => x.id);
+  const pins = sent.filter((x) => x.pin);
+  assert.equal(posts.length, 2);
+  assert.deepEqual(pins.filter((p) => !p.unpin).map((p) => p.pin), posts);
+  assert.deepEqual(pins.filter((p) => p.unpin).map((p) => p.pin), [posts[0]]);
+  assert.equal(gc.group.jid, GROUP);
+});

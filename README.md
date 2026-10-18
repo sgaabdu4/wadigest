@@ -56,7 +56,7 @@ For every group you can switch these on or off:
 | Switch | What happens |
 | --- | --- |
 | **Post in the group** | The summary is posted in the group chat |
-| **Pin it** | The post is pinned for 7 days, so it stays at the top |
+| **Pin it** | The post is pinned for 7 days, so it stays at the top When the next summary is pinned, the old one is unpinned. |
 | **Message each member** | Everyone in that group gets their own copy by private message, with their interests first ⭐. The copies are then deleted from your own chats ("delete for me"), so your feed stays clear. |
 | **Anonymise members** | The summary shows no names. Each person becomes "a member". This is off by default. |
 
