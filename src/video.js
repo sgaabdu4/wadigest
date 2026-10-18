@@ -25,7 +25,7 @@ function run(bin, args, timeoutMs) {
 
 async function has(bin) {
   try {
-    await run(bin, bin === 'ffmpeg' ? ['-version'] : ['--help'], 15_000);
+    await run(bin, /ffmpeg(\.exe)?$/.test(bin) ? ['-version'] : ['--help'], 15_000);
     return true;
   } catch (err) {
     return err.code !== 'ENOENT' && typeof err.code !== 'string';
@@ -36,16 +36,50 @@ export function defaultWhisperModel() {
   return path.join(paths().home, 'models', 'ggml-base.bin');
 }
 
+// Ready-made whisper.cpp builds for Linux and Windows, checked against their published checksums.
+// macOS gets whisper-cpp from Homebrew instead (there is no ready-made macOS command-line build).
+export const WHISPER_URL = 'https://github.com/ggml-org/whisper.cpp/releases/download/b5454';
+export const WHISPER_BUILDS = {
+  'linux-x64': ['whisper-bin-ubuntu-x64.tar.gz', 'a72becf15d7917f990f6313867a52638b82b7f9ef237fb0c980dac56a135781c'],
+  'linux-arm64': ['whisper-bin-ubuntu-arm64.tar.gz', '6b95ebfc60447df48e70ef00a73bdc3f41679ed2d01ef465827206a2ff325149'],
+  'win32-x64': ['whisper-bin-x64.zip', '6ba69e3482d7826214f90a6a9c84ca07782aec1e1d0c6a7c30c994fd5d816ccb'],
+  'win32-arm64': ['whisper-bin-win-cpu-arm64.zip', '28c37e7b598c3d9bbfef94f3bd67f2ee6f12b7c86f3da5edcf5e4308d615ff6d'],
+};
+export const whisperDir = () => path.join(paths().home, 'whisper');
+const exe = (name) => (process.platform === 'win32' ? `${name}.exe` : name);
+
+function findIn(dir, name, depth = 3) {
+  let entries = [];
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return ''; }
+  for (const e of entries) if (e.isFile() && e.name === name) return path.join(dir, e.name);
+  if (depth > 0) for (const e of entries) if (e.isDirectory()) { const hit = findIn(path.join(dir, e.name), name, depth - 1); if (hit) return hit; }
+  return '';
+}
+
+/** whisper-cli: on PATH, or the build wadigest downloaded. */
+export async function whisperBin() {
+  if (await has('whisper-cli')) return 'whisper-cli';
+  return findIn(whisperDir(), exe('whisper-cli'));
+}
+
+/** ffmpeg: on PATH, or where winget puts it on Windows. */
+export async function ffmpegBin() {
+  if (await has('ffmpeg')) return 'ffmpeg';
+  if (process.platform !== 'win32' || !process.env.LOCALAPPDATA) return '';
+  const winget = path.join(process.env.LOCALAPPDATA, 'Microsoft', 'WinGet');
+  const link = path.join(winget, 'Links', 'ffmpeg.exe');
+  return fs.existsSync(link) ? link : findIn(path.join(winget, 'Packages'), 'ffmpeg.exe', 4);
+}
+
 /** Which transcriber is available, if any. */
 export async function detectVideoTools(cfg) {
-  const ffmpeg = await has('ffmpeg');
+  const ffmpeg = await ffmpegBin();
   const model = cfg.video?.whisperModel || defaultWhisperModel();
   let whisper = null;
-  if (await has('whisper-cli')) {
-    if (fs.existsSync(model)) whisper = { kind: 'whisper.cpp', bin: 'whisper-cli', model };
-  }
+  const cli = await whisperBin();
+  if (cli && fs.existsSync(model)) whisper = { kind: 'whisper.cpp', bin: cli, model };
   if (!whisper && (await has('whisper'))) whisper = { kind: 'openai-whisper', bin: 'whisper', model: cfg.video?.whisperModel || 'base' };
-  return { ffmpeg, whisper, ready: ffmpeg && !!whisper, modelPath: model };
+  return { ffmpeg: !!ffmpeg, ffmpegBin: ffmpeg, whisper, ready: !!ffmpeg && !!whisper, modelPath: model };
 }
 
 export async function videoEnabled(cfg) {
@@ -68,7 +102,7 @@ export async function transcribeVideo(wacli, chatJid, msgId, tools) {
   try {
     const got = await wacli.downloadMedia(chatJid, msgId, videoFile);
     const input = fs.existsSync(videoFile) ? videoFile : got;
-    await run('ffmpeg', ['-y', '-loglevel', 'error', '-i', input, '-vn', '-ac', '1', '-ar', '16000', '-t', '600', audioFile], 5 * 60_000);
+    await run(tools.ffmpegBin || 'ffmpeg', ['-y', '-loglevel', 'error', '-i', input, '-vn', '-ac', '1', '-ar', '16000', '-t', '600', audioFile], 5 * 60_000);
     let text = '';
     if (tools.whisper.kind === 'whisper.cpp') {
       const base = path.join(dir, 'transcript');

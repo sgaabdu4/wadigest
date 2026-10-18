@@ -6,11 +6,16 @@ import path from 'node:path';
 import { paths } from './config.js';
 import crypto from 'node:crypto';
 import { DEFAULT_LOCAL_MODEL, LLAMA_BUILDS, MODELS, BUILD_URL, platformKey, llmDir, serverBin, localReady, modelInfo } from './local.js';
-import { detectVideoTools, defaultWhisperModel } from './video.js';
+import { defaultWhisperModel, detectVideoTools, ffmpegBin, whisperBin, whisperDir, WHISPER_BUILDS, WHISPER_URL } from './video.js';
 
 const which = (bin) => new Promise((resolve) => {
   if (!/^[\w.-]+$/.test(bin)) return resolve('');
-  if (process.platform === 'win32') return execFile('where', [bin], (err, out) => resolve(err ? '' : String(out).split(/\r?\n/)[0].trim()));
+  if (process.platform === 'win32') {
+    return execFile('where', [bin], (err, out) => {
+      const hits = err ? [] : String(out).split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      resolve(hits.find((h) => /\.(exe|cmd|bat)$/i.test(h)) || hits[0] || '');
+    });
+  }
   execFile('/bin/sh', ['-c', `command -v ${bin}`], (err, out) => resolve(err ? '' : String(out).trim()));
 });
 
@@ -116,19 +121,58 @@ export async function installLocalAI({ model = DEFAULT_LOCAL_MODEL, onLog = () =
   onLog(`✓ Local AI ready (${info.label})`);
 }
 
-/** ffmpeg + whisper.cpp + a multilingual model, for transcribing group videos. */
-export async function installVideo({ onLog = () => {} } = {}) {
-  if (process.platform === 'win32') throw new Error('Video transcripts are not available on Windows yet.');
-  const tools = await detectVideoTools({});
-  if (!tools.ffmpeg || !(await which('whisper-cli'))) {
-    await brewOrExplain(onLog);
-    const pkgs = [!tools.ffmpeg && 'ffmpeg', !(await which('whisper-cli')) && 'whisper-cpp'].filter(Boolean);
-    onLog(`Installing ${pkgs.join(' and ')} (for video transcripts)…`);
-    await runStreaming('brew', ['install', ...pkgs], onLog);
+/** Speech-to-text for videos and voice notes: ffmpeg + whisper.cpp + a multilingual model. */
+export async function installVideo({ onLog = () => {}, interactive = false } = {}) {
+  const needFfmpeg = !(await ffmpegBin());
+  const needWhisper = !(await whisperBin());
+  if (process.platform === 'darwin') {
+    if (needFfmpeg || needWhisper) {
+      await brewOrExplain(onLog);
+      const pkgs = [needFfmpeg && 'ffmpeg', needWhisper && 'whisper-cpp'].filter(Boolean);
+      onLog(`Installing ${pkgs.join(' and ')} (for speech-to-text)…`);
+      await runStreaming('brew', ['install', ...pkgs], onLog);
+    }
+  } else {
+    if (needWhisper) {
+      const build = WHISPER_BUILDS[platformKey()];
+      if (!build) throw new Error(`Speech-to-text isn't available for this computer (${platformKey()}).`);
+      onLog('Getting the speech-to-text program (about 10 MB)…');
+      const dir = whisperDir();
+      fs.mkdirSync(dir, { recursive: true });
+      const archive = path.join(dir, build[0]);
+      await fetchChecked(`${WHISPER_URL}/${build[0]}`, archive, build[1], onLog);
+      await runStreaming('tar', ['-xf', archive, '-C', dir], onLog);
+      fs.rmSync(archive, { force: true });
+      if (!(await whisperBin())) throw new Error('The speech-to-text program did not unpack correctly. Try again.');
+    }
+    if (process.platform === 'linux') await linuxPackages({ ffmpeg: needFfmpeg, onLog, interactive });
+    if (process.platform === 'win32' && needFfmpeg) {
+      if (!(await which('winget'))) throw new Error('Speech-to-text needs ffmpeg. Install it with `winget install Gyan.FFmpeg`, then try again.');
+      onLog('Installing ffmpeg with winget…');
+      await runStreaming('winget', ['install', '-e', '--id', 'Gyan.FFmpeg', '--silent', '--accept-source-agreements', '--accept-package-agreements'], onLog);
+    }
+    if (!(await ffmpegBin())) throw new Error('ffmpeg did not install. Install it, then try again.');
   }
   const model = defaultWhisperModel();
   if (!fs.existsSync(model)) await download('https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin', model, onLog);
-  onLog('✓ Video transcripts ready');
+  onLog('✓ Speech-to-text ready');
+}
+
+/** Linux: ffmpeg, plus libgomp that the whisper build needs. apt with sudo; the page can't type a password. */
+async function linuxPackages({ ffmpeg, onLog, interactive }) {
+  const gompOk = await new Promise((resolve) => execFile('/bin/sh', ['-c', 'ldconfig -p | grep -q libgomp.so.1'], (err) => resolve(!err)));
+  const pkgs = [ffmpeg && 'ffmpeg', !gompOk && 'libgomp1'].filter(Boolean);
+  if (!pkgs.length) return;
+  const cmd = `sudo apt-get install -y ${pkgs.join(' ')}`;
+  if (!(await which('apt-get'))) throw new Error(`Speech-to-text needs ${pkgs.join(' and ')}. Install them with your package manager, then try again.`);
+  onLog(`Installing ${pkgs.join(' and ')} with apt…`);
+  const script = `apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ${pkgs.join(' ')}`;
+  const root = process.getuid?.() === 0;
+  try {
+    await runStreaming(root ? 'sh' : 'sudo', root ? ['-c', script] : [...(interactive ? [] : ['-n']), 'sh', '-c', script], onLog);
+  } catch {
+    throw new Error(`Speech-to-text needs ${pkgs.join(' and ')}. In a terminal, run: ${cmd}  Then try again.`);
+  }
 }
 
 export async function localStatus(cfg) {

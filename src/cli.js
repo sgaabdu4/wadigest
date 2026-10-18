@@ -249,12 +249,10 @@ async function cmdSetup(flags) {
     const localOk = mode !== 'local' || (await localStatus(cfg)).modelReady;
     const claudeOk = mode !== 'claude' || claude.cli || !!loadSecrets().anthropicApiKey || !!process.env.ANTHROPIC_API_KEY;
     cfg.mode = localOk && claudeOk ? mode : 'digest';
-    if (process.platform !== 'win32') {
-      const vid = await ask(rl, `Also transcribe videos posted in the group? On this computer, ~150 MB download. (y/n)`, local.video ? 'y' : 'n');
-      if (/^y/i.test(vid)) {
-        try { await installVideo({ onLog }); cfg.video.enabled = 'auto'; } catch (e) { console.log(`✖ ${e.message}`); }
-      } else cfg.video.enabled = 'off';
-    }
+    const vid = await ask(rl, 'Also turn videos and voice notes into text, on this computer? About 150 MB. You choose which groups later. (y/n)', local.video ? 'y' : 'n');
+    if (/^y/i.test(vid)) {
+      try { await installVideo({ onLog, interactive: true }); cfg.video.enabled = 'auto'; } catch (e) { console.log(`✖ ${e.message}`); }
+    } else cfg.video.enabled = 'off';
     saveConfig(cfg);
 
     // 4. Schedule + DMs

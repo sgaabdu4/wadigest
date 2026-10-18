@@ -3,7 +3,7 @@
 // Claude Code's `claude -p` with the user's own login. Any failure -> caller falls back
 // to the no-AI digest, so a post still goes out.
 
-import { spawn } from 'node:child_process';
+import { spawnCli } from './util.js';
 import { loadSecrets } from './config.js';
 import { summariseAll } from './fullsummary.js';
 
@@ -15,7 +15,7 @@ function viaCli(prompt, cfg, timeoutMs) {
   return new Promise((resolve, reject) => {
     const args = ['-p', '--output-format', 'text'];
     args.push('--model', cfg.claude?.model || DEFAULT_CLI_MODEL);
-    const child = spawn(cfg.claude?.command || 'claude', args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawnCli(cfg.claude?.command || 'claude', args, { stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
     let err = '';
     const timer = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('claude -p timed out')); }, timeoutMs);

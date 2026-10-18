@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 // Small shared helpers. No dependencies.
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -50,4 +51,11 @@ export function parseInterests(text) {
 
 export function plural(n, word, pluralWord) {
   return `${n} ${n === 1 ? word : (pluralWord || word + 's')}`;
+}
+
+/** Start a command. On Windows, npm's launchers (claude.cmd, codex.cmd) only start through cmd.exe. */
+export function spawnCli(cmd, args, opts = {}) {
+  if (process.platform !== 'win32') return spawn(cmd, args, opts);
+  const q = (a) => (/[\s"^&|<>()%!]/.test(String(a)) ? `"${String(a).replace(/"/g, '""')}"` : String(a));
+  return spawn([cmd, ...args].map(q).join(' '), { ...opts, shell: true, windowsHide: true });
 }
