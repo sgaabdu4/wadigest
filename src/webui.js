@@ -50,7 +50,9 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
   let wacli = new Wacli(cfg);
 
   // The background service holds wacli's store lock; pause it while this page is open.
-  const serviceWasRunning = stopServiceIfRunning();
+  // During first setup the page needs WhatsApp's connection (linking). Once set up, the service keeps
+  // running so it can answer members; it is paused only to link a different account or to send.
+  let serviceWasRunning = cfg.setupDone ? false : stopServiceIfRunning();
   let finished = false;
 
   const link = { status: 'idle', kind: '', code: '', qr: '', error: '', messages: 0, child: null };
@@ -75,6 +77,7 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
   };
 
   const startLink = (phone) => {
+    if (stopServiceIfRunning()) serviceWasRunning = true;
     if (link.child) link.child.kill('SIGINT');
     Object.assign(link, { status: 'starting', kind: phone ? 'code' : 'qr', code: '', qr: '', error: '', messages: 0 });
     const child = wacli.linkWithEvents({
@@ -128,6 +131,7 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
       members: members.filter((m) => m.active).length,
       lastPost: lastPost ? { week: lastPost[0], at: fmtWhen(new Date(lastPost[1].at), tz), dms: lastPost[1].dms?.sent ?? null } : null,
       service: finished ? serviceStatus() : (serviceWasRunning ? 'paused while this page is open' : serviceStatus()),
+      pauses: !cfg.setupDone,
       finished,
       setupDone: !!cfg.setupDone,
       mode: cfg.mode,
