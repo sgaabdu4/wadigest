@@ -7,7 +7,7 @@ import { matchInterests } from '../src/members.js';
 import { renderGroupPost, renderPersonal } from '../src/format.js';
 import { buildDigest, mergeSummary, extractJson } from '../src/summary.js';
 import { msg, reaction } from './helpers.js';
-import { anonymiseMessages, scrubNames } from '../src/anon.js';
+import { pseudonymise, scrubNames, restoreNames } from '../src/anon.js';
 import { buildTranscript } from '../src/fullsummary.js';
 
 test('links: extraction and canonicalisation dedupe the same link', () => {
@@ -177,13 +177,13 @@ test('summarise everything: long chats become notes, then a summary of the notes
 test('anon: no names or @mentions reach the summary, the AI sees stand-in labels', () => {
   const t0 = Date.parse('2026-10-13T09:00:00Z');
   const at = (h) => new Date(t0 + h * 3600e3).toISOString();
-  const rows = anonymiseMessages([
+  const rows = pseudonymise([
     msg({ MsgID: 'L1', Text: 'great read https://example.com/post', SenderName: 'Sam Jones', Timestamp: at(0) }),
     msg({ MsgID: 'R1', Text: 'agree with @447700900123, really useful', SenderJID: 'b@s.whatsapp.net', SenderName: 'Aisha', QuotedMsgID: 'L1', Timestamp: at(1) }),
     msg({ MsgID: 'TH', Text: 'Which vector DB are you all using?', SenderName: 'Sam Jones', Timestamp: at(2) }),
     msg({ MsgID: 'TH1', Text: 'pgvector has been solid for us', SenderJID: 'b@s.whatsapp.net', SenderName: 'Aisha', QuotedMsgID: 'TH', Timestamp: at(2.1) }),
     msg({ MsgID: 'TH2', Text: 'qdrant', SenderJID: 'c@s.whatsapp.net', SenderName: 'Tom', QuotedMsgID: 'TH', Timestamp: at(2.2) }),
-  ]);
+  ]).messages;
   const lines = buildTranscript(rows, { timeZone: 'Europe/London' }).join('\n');
   assert.match(lines, /Member 1/);
   assert.doesNotMatch(lines, /Sam|Aisha|Tom|447700900123/);
@@ -208,4 +208,23 @@ test('sent today: scheduled and manual sends count, other days and groups do not
   assert.equal(sentTodayAt(state, 'g1@g.us', 'Europe/London', now), '2026-10-18T16:08:00Z');
   assert.equal(sentTodayAt(state, 'g2@g.us', 'Europe/London', now), null);
   assert.equal(sentTodayAt(state, 'g3@g.us', 'Europe/London', now), null);
+});
+
+test('pseudonymise: the AI gets labels only; names typed in messages and @mentions are swapped; names come back after', () => {
+  const t0 = Date.parse('2026-10-13T09:00:00Z');
+  const at = (h) => new Date(t0 + h * 3600e3).toISOString();
+  const { messages, names } = pseudonymise([
+    msg({ MsgID: 'A', Text: 'Sam, can you book Sadaf?', SenderJID: '447700900111@s.whatsapp.net', SenderName: 'Aisha Khan', Timestamp: at(0) }),
+    msg({ MsgID: 'B', Text: 'done, thanks Aisha. @447700900111 see you there', SenderJID: '447700900222@s.whatsapp.net', SenderName: 'Sam Jones', Timestamp: at(1) }),
+    msg({ MsgID: 'C', Text: 'Will we meet at 1?', SenderJID: '447700900333@s.whatsapp.net', SenderName: 'Tom', Timestamp: at(2) }),
+  ]);
+  const lines = buildTranscript(messages, { timeZone: 'Europe/London' }).join('\n');
+  assert.doesNotMatch(lines, /Aisha|Sam|Tom|Jones|Khan|447700900/);
+  assert.match(lines, /Member 2, can you book Sadaf\?/);
+  assert.match(lines, /thanks Member 1\. Member 1 see you there/);
+  assert.match(lines, /Will we meet at 1\?/);
+  const written = { items: [{ summary: 'Member 1 asked Member 2 to book Sadaf. Member 3 asked about the time.', sharedBy: 'Aisha Khan' }] };
+  restoreNames(written, names);
+  assert.equal(written.items[0].summary, 'Aisha Khan asked Sam Jones to book Sadaf. Tom asked about the time.');
+  assert.equal(written.items[0].sharedBy, 'Aisha Khan');
 });

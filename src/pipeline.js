@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { paths, saveState, writeJsonAtomic, groupConfig } from './config.js';
 import { rollingWindow, readDays } from './schedule.js';
 import { rankMessages } from './rank.js';
-import { anonymiseMessages, scrubNames } from './anon.js';
+import { pseudonymise, scrubNames, restoreNames } from './anon.js';
 import { fetchLinkInfo } from './links.js';
 import { buildDigest, mergeSummary, readSummaryFile } from './summary.js';
 import { renderGroupPost, renderPersonal } from './format.js';
@@ -38,7 +38,8 @@ export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fe
   const notes = [];
   const anon = cfg.group.anon === true;
   const raw = await wacli.listMessages({ chat: cfg.group.jid, after: window.start, before: window.end });
-  const messages = anon ? anonymiseMessages(raw) : raw;
+  const pseudo = pseudonymise(raw);
+  const messages = anon ? pseudo.messages : raw;
 
   if (videos) {
     const v = await processVideos(wacli, cfg, state, messages, { max: 5 });
@@ -68,7 +69,7 @@ export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fe
   let digest = buildDigest(ranked, { group: cfg.group, window, topN });
   digest.writtenBy = 'wadigest (no AI)';
   const transcripts = Object.fromEntries(Object.entries(state.videos || {}).filter(([, v]) => v.transcript).map(([id, v]) => [id, v.transcript]));
-  const lines = buildTranscript(messages, { timeZone: cfg.schedule.timezone, linkInfo: linkInfoFrom(ranked.items), transcripts });
+  const lines = buildTranscript(pseudo.messages, { timeZone: cfg.schedule.timezone, linkInfo: linkInfoFrom(ranked.items), transcripts });
   const days = Math.max(1, Math.round((new Date(window.end).getTime() - new Date(window.start).getTime()) / 864e5));
 
   const external = summaryFile || (cfg.mode === 'summary-file' && cfg.summary?.path ? cfg.summary.path : null);
@@ -98,6 +99,7 @@ export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fe
   }
 
   if (anon) scrubNames(digest);
+  else restoreNames(digest, pseudo.names);
   writeJsonAtomic(paths().lastDigest, digest);
   return { digest, messages: messages.length, notes, transcript: lines };
 }

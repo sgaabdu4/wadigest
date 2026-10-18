@@ -58,7 +58,7 @@ For every group you can switch these on or off:
 | **Post in the group** | The summary is posted in the group chat |
 | **Pin it** | The post is pinned for 7 days, so it stays at the top |
 | **Message each member** | Everyone in that group gets their own copy by private message, with their interests first ⭐. The copies are then deleted from your own chats ("delete for me"), so your feed stays clear. |
-| **Anonymise members** | No names or @mentions in the summary. Off by default. The AI still follows who replied to whom, using stand-in labels it never writes out. Names someone types inside a message stay as written. |
+| **Anonymise members** | The summary shows no names. Each person becomes "a member". This is off by default. |
 
 Members can reply to wadigest by private message, or send in the group:
 
@@ -79,7 +79,7 @@ You choose in the sentence: *written simply*, *with local AI* or *with Claude*. 
 | --- | --- | --- |
 | **Simply** (default) | Lists everything shared in the period, busiest first: every link with its page title, every video, every busy thread and every substantial message. | No AI, instant, nothing to install. |
 | **With local AI** | A small model that comes with wadigest ([Qwen3 1.7B](https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF), run by [llama.cpp](https://github.com/ggml-org/llama.cpp)) reads every message and writes the summary. | Runs on your computer, nothing leaves it. About a 1.3 GB download, once, checked against its published checksum. Around 20 to 30 seconds per group. |
-| **With Claude** | Claude Haiku reads every message and writes the summary. It uses [Claude Code](https://claude.com/claude-code) if you have it, or an API key. | The best writing. The chat and linked page text are sent to Anthropic. |
+| **With Claude** | Claude Haiku reads every message and writes the summary. It uses [Claude Code](https://claude.com/claude-code) if you have it, or an API key. | The best writing. The chat, with names removed, and linked page text are sent to Anthropic. |
 
 The AI styles read every message, not just the popular ones: reactions only decide the order. Long chats are summarised in parts, then the parts are summarised again. Summaries are short, plain English (close to ASD-STE100), never invent topics, and only keep links that were really shared. If an AI style fails for any reason, the simple summary goes out instead, so a summary always arrives.
 
@@ -113,7 +113,18 @@ wadigest doctor         # check everything is working
 - Everything stays in `~/.wadigest` on your computer: the linked WhatsApp session, settings and logs.
 - wadigest opens the links people share, to read their titles and text.
 - Only with Claude does the chat leave your computer, to Anthropic.
+- The AI never gets names or phone numbers. See below.
 - To remove it, run `bash scripts/uninstall.sh` in the wadigest folder (`~/.wadigest/app` if you used the one command), then remove the device in WhatsApp under Linked devices.
+
+### What the AI sees
+
+1. Before the AI reads the chat, wadigest gives each person a label, for example "Member 3".
+2. wadigest uses the label in place of the name in these places: who sent each message, who they replied to, each @mention, and each member name in the message text.
+3. The AI writes the summary with the labels only.
+4. wadigest then replaces each label with the real name.
+5. If you tick **Anonymise members** for a group, wadigest uses "a member" in place of each label. No name goes into that group's summary.
+
+One limit: wadigest knows only the names of people who sent a message. If a message names a person who did not send a message, that name stays in the text.
 
 ## Good to know
 
