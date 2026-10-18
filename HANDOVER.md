@@ -2,7 +2,7 @@
 
 Read this first. It explains what we're building, everything decided so far, what works, what's been tested, and what's left. You can copy this whole folder to another computer and carry on from here.
 
-_Last updated: Sunday 18 October 2026, around 17:30 (UK time). Fourth pass: real WhatsApp test on real groups, summarise everything, built-in local AI, demo video._ _Previous: around 16:10 (UK time). Third pass: several groups, any schedule, Send now, a calm one-click setup page, one-command install, public GitHub repo (sections 2.3, 4, 5)._
+_Last updated: Sunday 18 October 2026, around 18:25 (UK time). Fresh-Mac end-to-end run passed; demo video v2 done._ _Earlier: around 17:30 (UK time). Fourth pass: real WhatsApp test on real groups, summarise everything, built-in local AI, demo video._ _Previous: around 16:10 (UK time). Third pass: several groups, any schedule, Send now, a calm one-click setup page, one-command install, public GitHub repo (sections 2.3, 4, 5)._
 
 ---
 
@@ -166,6 +166,10 @@ No runtime dependencies: just Node 20+.
 - **Bugs found and fixed during the real run:** sends failed while the service held the store lock (now the service pauses for the whole send, page and CLI); `launchctl kickstart` could hang (20 s limit, bootstrap retry); the page paused the service and so stopped member replies (now only during first setup or relinking); "All quiet" when a quiet chat had a short real message (now lists every message).
 - **Ubuntu 24.04 container, no screen:** install, terminal setup with several groups, preview, run, config commands all pass (systemd itself not available in the container).
 
+**Fresh-Mac end-to-end run (18 Oct, about 18:00):** empty home folder, fake WhatsApp tool, public one-line install from GitHub. Page opened by itself in about 2 s; Getting ready, QR, connected, Which groups? all automatic; ticked two groups, Start, All set (next Sunday 25 Oct 09:00); Preview showed both; Send now posted and pinned each group, sent private messages only to that group's members (2 and 1) and deleted each for the sender; typing `wadigest` reopened the page with the service running. Apple's `container` tool can't test this: it runs Linux only, and its guests have no internet on this Mac.
+
+**Live setup on the runner's Mac right now:** groups Summarizer and Family ❤️ (post, pin and DMs on), every week on Sunday 09:00, written with the built-in local AI (Qwen3 1.7B, installed in `~/.wadigest/llm`). The background service is running. Ollama was removed from the code; a failed Homebrew `ollama` install may have left partial files (`brew list ollama` to check).
+
 **Not verified:**
 1. **Windows:** `get.ps1`, `install.ps1`, `Start wadigest.cmd`, the Startup-folder service and the Windows llama.cpp build were written carefully but never run on a real Windows PC.
 2. **Invite QR with a second phone**, and a member's `!digest join` reply arriving within about 2 minutes.
@@ -199,7 +203,7 @@ No runtime dependencies: just Node 20+.
 
 ## 7. Next steps (in order)
 
-1. **Demo video v2** with a Kokoro British voice (in progress; files in `demo/`, not committed).
+1. **Demo video:** v2 is done: `demo/wadigest-demo-v2.mp4` (1920x1080, 3:08). It uses real footage of the full flow recorded with the fake WhatsApp tool and sample groups, a Kokoro voice (`bm_fable`, speed 1.08, free, runs locally) and a soft ffmpeg music bed. v1 (ElevenLabs "George") is `demo/wadigest-demo-v1.mp4`. `demo/` is not committed (gitignored). Rebuild steps are in `demo/NOTES.md`. Its build scripts live in the session scratch folder, so copy them somewhere safe if you want to edit the video later. Not checked: the voice by ear, including how it says "wa-dee-jest". The ElevenLabs account has about 1,170 characters left until its monthly reset.
 2. **Before Sunday 25 October 09:00:** leave the runner's Mac on or asleep (it catches up within 3 days). Open the page (`wadigest`) and press **Preview** to check each group.
 3. **Invite test:** on the page, press **Invite**; someone scans it and sends `!digest join`. They should get a reply within about 2 minutes.
 4. **Windows:** run the one PowerShell line on a Windows PC and go through setup.
