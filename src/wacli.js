@@ -114,6 +114,14 @@ export class Wacli {
     return this.run(['sync', '--once', '--refresh-groups', '--idle-exit', '10s'], { timeoutMs: 5 * 60_000 });
   }
 
+  /** Ask the phone for a chat's older messages; needs the store lock and at least one stored message to start from. */
+  backfill(chatJid, { requests = 2 } = {}) {
+    return new Promise((resolve) => {
+      execFile(this.bin, ['--store', this.store, 'history', 'backfill', '--chat', chatJid, '--count', '100', '--requests', String(requests), '--wait', '30s'],
+        { timeout: 3 * 60_000 }, (err) => resolve(!err));
+    });
+  }
+
   async participants(groupJid) {
     const d = await this.run(['groups', 'participants', 'list', '--jid', groupJid], { readOnly: true });
     return (Array.isArray(d) ? d : []).map((p) => ({ jid: p.user_jid || p.UserJID, role: p.role || p.Role || '' }));

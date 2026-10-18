@@ -225,6 +225,10 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
         }
         if (!picked.length) return send(res, 400, { error: 'Pick at least one group.' });
         setGroups(loadConfig(), picked);
+        // A freshly linked phone sends little history, so ask it for each group's recent messages.
+        const paused = stopServiceIfRunning();
+        for (const g of picked) await wacli.backfill(g.jid);
+        if (paused) { try { installService(loadConfig()); } catch { serviceWasRunning = true; } }
         return send(res, 200, { ok: true });
       }
 

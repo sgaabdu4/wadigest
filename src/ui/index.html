@@ -274,6 +274,7 @@ async function viewLink(fresh = false) {
 
 function showLinkError(msg) { const el = $('#lstatus'); if (el) el.innerHTML = note(msg, 'bad'); }
 
+let syncSince = 0;
 function linkProgress() {
   const L = S.link;
   if (L.status === 'done' || (S.linked && L.status !== 'syncing' && L.status !== 'waiting')) {
@@ -289,7 +290,9 @@ function linkProgress() {
     return;
   }
   if (L.status === 'syncing') {
-    $('#lstatus').innerHTML = `<p class="note good"><span class="spin"></span>Connected. Loading your chats${L.messages ? `: ${L.messages.toLocaleString()} messages so far` : ''}</p><p class="hint center">Your phone is linked. WhatsApp is sending your recent messages, which can take a minute. This page moves on by itself.</p>`;
+    syncSince ||= Date.now();
+    const secs = Math.round((Date.now() - syncSince) / 1000);
+    $('#lstatus').innerHTML = `<p class="note good"><span class="spin"></span>Connected. Loading your chats${L.messages ? `: ${L.messages.toLocaleString()} messages so far` : ''} (${secs}s)</p><p class="hint center">Your phone is linked. WhatsApp is sending your recent messages. This usually takes 1 to 2 minutes, longer in busy groups. Keep WhatsApp open on your phone. This page moves on by itself.</p>`;
     if ($('.qr')) $('.qr').classList.add('hidden');
     if ($('#codewrap')) $('#codewrap').innerHTML = '';
     return;
@@ -416,6 +419,7 @@ async function viewSettings() {
     $('#serr').classList.add('hidden');
     busy(btn);
     try {
+      busy(btn, 'Getting recent messages');
       await api('/groups', { groups: [...picked.values()] });
       await api('/schedule', { everyDays: Number($('#often').value), day: $('#day').value, time: $('#time').value });
       if (mode === 'local' && !M.local.ready) {
