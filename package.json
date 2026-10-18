@@ -1,6 +1,6 @@
 {
   "name": "wadigest",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Weekly digest for a WhatsApp group: top links, videos and threads, posted to the group and DM'd to opted-in members. Runs on one person's computer, built on wacli.",
   "type": "module",
   "license": "MIT",

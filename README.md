@@ -72,7 +72,7 @@ Members can reply to wadigest by private message, or send in the group:
 **Invite** on the home screen shows a QR code. Anyone can scan it with their phone camera, then press send in WhatsApp to sign up.
 
 
-**Send now** sends a summary at once. You tick the groups, and for each one you can change post, pin, private messages and anonymise for this send only. You see each group's summary before the Send button works. A group that already got its summary today starts unticked.
+The home screen lists your groups. Tick the ones to send to now. Open a group's **Preview** to see its summary and to change post, pin, private messages and anonymise for this send only. The Send button works only after you open the preview of each ticked group. A group that already got its summary today starts unticked. The Sunday summary always goes to all your groups, with their saved settings.
 
 Each summary ends with a short line: *Made with wadigest: github.com/sgaabdu4/wadigest*.
 

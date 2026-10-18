@@ -94,7 +94,11 @@
   details.pv > summary::before { content: "▸ "; }
   details.pv[open] > summary::before { content: "▾ "; }
   details.pv > .phone { margin-top: 8px; }
-  .sendg { margin: 2px 0 14px; }
+  .sendg { margin: 0 0 12px 36px; }
+  .sendg .gsum { margin: 0; text-align: left; }
+  .sendg details.pv { margin-top: 4px; }
+  .sendg details.pv > summary { text-align: left; }
+  .sendg .toggles { margin: 6px 0 2px; }
   details.more { margin-top: 26px; color: var(--ink-3); font-size: 13px; text-align: center; }
   details.more summary { cursor: pointer; }
   .log { font-family: var(--mono); font-size: 12px; text-align: left; background: var(--card); border-radius: 12px; padding: 10px 12px; max-height: 160px; overflow: auto; white-space: pre-wrap; margin-top: 10px; }
@@ -466,113 +470,88 @@ function waFormat(text) {
 function viewHome() {
   setSteps(0);
   const running = /running|paused/.test(S.service);
+  const opts = [['post', 'Post in the group'], ...(S.pin ? [['pin', 'Pin it']] : []), ['dm', 'Message each member'], ['anon', 'Anonymise members']];
+  const pick = new Map(S.groups.map((g) => [g.jid, { jid: g.jid, on: !g.sentToday, post: g.post !== false, pin: !!S.pin && g.post !== false && g.pin !== false, dm: g.dm !== false, anon: g.anon === true }]));
   $('#app').innerHTML = `
     <div class="done-mark">${running ? '✓' : '·'}</div>
     <h2>${running ? 'All set' : 'Paused'}</h2>
     <p class="lead" style="margin-bottom:4px">${running ? 'Next summary' : 'Nothing will be sent until you start it again.'}</p>
     ${running ? `<p class="next">${esc(S.nextRun)}</p>` : '<p class="center" style="margin:18px 0 30px"><button class="btn" id="startsvc">Start again</button></p>'}
-    <div class="row">
-      <button class="btn soft" id="runnow">Send now</button>
-      <button class="btn soft" id="prev">Preview</button>
-      <button class="btn soft" id="invite">Invite</button>
-    </div>
+    <p class="pvname">Your groups. Tick the ones to send to now. Each Sunday summary still goes to all of them.</p>
+    <div id="sendlist">${S.groups.map((g) => `
+      <label class="grow"><input type="checkbox" data-jid="${esc(g.jid)}" ${pick.get(g.jid).on ? 'checked' : ''}><span class="tick"></span><span>${esc(g.name)}${g.sentToday ? ` <span class="hint">(already sent today at ${esc(g.sentToday)})</span>` : ''}</span></label>
+      <div class="sendg" data-jid="${esc(g.jid)}"><p class="hint gsum"></p>
+      <details class="pv"><summary>Preview</summary><div class="toggles">${opts.map(([k, t]) => `<button class="tog" data-jid="${esc(g.jid)}" data-k="${k}">${t}</button>`).join('')}</div>
+      <p class="hint">These choices are for sending now only.</p><div class="phone"><div class="bubble"></div></div></details></div>`).join('')}</div>
+    <div id="senderr" class="err hidden"></div>
+    <button class="btn wide" id="sendgo" style="margin-top:18px" disabled>Send</button>
     <div id="out"></div>
-    <p class="links"><button class="btn link" data-go="groups">Change groups</button><button class="btn link" data-go="settings">Change settings</button><button class="btn link" data-go="relink">Change WhatsApp</button></p>`;
+    <p class="links"><button class="btn link" id="invite">Invite</button><button class="btn link" data-go="groups">Change groups</button><button class="btn link" data-go="settings">Change settings</button><button class="btn link" data-go="relink">Change WhatsApp</button></p>`;
   document.querySelectorAll('[data-go]').forEach((b) => b.onclick = () => {
     if (b.dataset.go === 'relink') { linkTab = 'qr'; view = 'link'; viewLink(true); return; }
     picked = null;
     go(b.dataset.go);
   });
   if ($('#startsvc')) $('#startsvc').onclick = async () => { busy($('#startsvc')); try { await api('/start', {}); await refresh(); viewHome(); } catch (e) { $('#out').innerHTML = note(e.message, 'bad'); } };
-  let previewSeq = 0;
-  let previews = null;
-  const getPreviews = (fresh) => (previews && !fresh ? previews : (previews = api(fresh ? '/preview?fresh=1' : '/preview').then((r) => r.previews).catch((e) => { previews = null; throw e; })));
-  const loadPreview = async (fresh) => {
-    const seq = ++previewSeq;
-    waiting($('#out'), S.mode === 'digest' ? 'Reading messages' : 'Reading every message and writing the summary', S.mode === 'digest' ? '' : 'This usually takes a minute or two. Nothing is sent.');
-    try {
-      const list = await getPreviews(fresh);
-      if (seq !== previewSeq || view !== 'home') return;
-      clearInterval(tickTimer);
-      $('#out').innerHTML = list.map((p, i) => `<details class="pv"${i === 0 ? ' open' : ''}><summary>${esc(p.name)} <span class="hint">(${p.messages} messages)</span></summary><div class="phone"><div class="bubble">${waFormat(p.text)}</div></div></details>`).join('') + '<p class="center"><button class="btn link" id="reprev">Refresh</button></p>';
-      $('#reprev').onclick = () => loadPreview(true);
-    } catch (e) { if (seq === previewSeq) $('#out').innerHTML = note(e.message, 'bad'); }
-  };
   $('#invite').onclick = () => {
-    previewSeq++;
     clearInterval(tickTimer);
     const link = `https://wa.me/${S.phone}?text=${encodeURIComponent('!digest join')}`;
     $('#out').innerHTML = `<div class="qr" style="margin-top:26px"><div class="box" id="qrbox"></div></div><p class="hint center">Anyone in your groups can scan this with their phone camera, then press send. They’ll get each summary as a message.</p>`;
     lastQr = '';
     drawQr(link);
   };
-  $('#runnow').onclick = () => {
-    previewSeq++;
-    clearInterval(tickTimer);
-    const seq = previewSeq;
-    const pick = new Map(S.groups.map((g) => [g.jid, { jid: g.jid, on: !g.sentToday, post: g.post !== false, pin: !!S.pin && g.post !== false && g.pin !== false, dm: g.dm !== false, anon: g.anon === true }]));
-    const opts = (g) => [['post', 'Post in the group'], ...(S.pin ? [['pin', 'Pin it']] : []), ['dm', 'Message each member'], ['anon', 'Anonymise members']]
-      .map(([k, t]) => `<button class="tog" data-jid="${esc(g.jid)}" data-k="${k}">${t}</button>`).join('');
-    $('#out').innerHTML = `<p class="pvname">Tick the groups to send to. The choices under each group are for this send only.</p><div id="sendlist">${S.groups.map((g) => `
-      <label class="grow"><input type="checkbox" data-jid="${esc(g.jid)}" ${pick.get(g.jid).on ? 'checked' : ''}><span class="tick"></span><span>${esc(g.name)}${g.sentToday ? ` <span class="hint">(already sent today at ${esc(g.sentToday)})</span>` : ''}</span></label>
-      <div class="sendg" data-jid="${esc(g.jid)}"><div class="toggles">${opts(g)}</div>
-      <details class="pv"><summary>Show what ${esc(g.name)} gets</summary><div class="phone"><div class="bubble"></div></div></details></div>`).join('')}</div>
-      <div id="senderr" class="err hidden"></div>
-      <button class="btn wide" id="sendgo" style="margin-top:18px" disabled>Waiting for the previews</button>
-      <p class="center" style="margin-top:10px"><button class="btn link" id="sendcancel">Cancel</button></p>`;
-    const box = (jid) => document.querySelector(`.sendg[data-jid="${CSS.escape(jid)}"]`);
-    const want = (c) => `${c.anon ? 1 : 0}${c.dm ? 1 : 0}`;
-    const shown = new Map();
-    let chain = Promise.resolve();
-    const refreshGo = () => {
-      const on = [...pick.values()].filter((c) => c.on);
-      const ready = on.length > 0 && on.every((c) => shown.get(c.jid) === want(c));
-      const empty = on.some((c) => !c.post && !c.dm);
-      $('#sendgo').disabled = !ready || empty;
-      $('#sendgo').textContent = !on.length ? 'Tick a group to send to' : empty ? 'Each group needs Post or Message' : ready ? `Send to ${on.length} group${on.length > 1 ? 's' : ''}` : 'Waiting for the previews';
-    };
-    const fetchPreview = (c) => {
-      const k = want(c);
-      const el = box(c.jid).querySelector('.bubble');
-      el.innerHTML = '<span class="spin"></span>Writing the preview…';
-      chain = chain.then(() => (seq === previewSeq && want(c) === k ? api(`/preview?group=${encodeURIComponent(c.jid)}&anon=${c.anon ? 1 : 0}&dm=${c.dm ? 1 : 0}`) : null)).then((r) => {
-        if (!r || seq !== previewSeq || want(c) !== k) return;
-        el.innerHTML = waFormat(r.previews[0].text);
-        shown.set(c.jid, k);
-        refreshGo();
-      }).catch((e) => { if (seq === previewSeq) showErr('#senderr', e.message); });
-    };
-    const paint = () => {
-      for (const c of pick.values()) {
-        const b = box(c.jid);
-        b.style.display = c.on ? '' : 'none';
-        b.querySelectorAll('.tog').forEach((t) => { t.classList.toggle('on', !!c[t.dataset.k]); t.setAttribute('aria-pressed', !!c[t.dataset.k]); });
-      }
-      refreshGo();
-    };
-    document.querySelectorAll('#sendlist input').forEach((i) => i.onchange = () => {
-      const c = pick.get(i.dataset.jid);
-      c.on = i.checked;
-      if (c.on && shown.get(c.jid) !== want(c)) fetchPreview(c);
-      paint();
-    });
-    document.querySelectorAll('#sendlist .tog').forEach((t) => t.onclick = () => {
-      const c = pick.get(t.dataset.jid);
-      const k = t.dataset.k;
-      c[k] = !c[k];
-      if (k === 'post' && !c.post) c.pin = false;
-      if (k === 'pin' && c.pin) c.post = true;
-      if (shown.get(c.jid) !== want(c)) fetchPreview(c);
-      paint();
-    });
-    $('#sendcancel').onclick = () => { previewSeq++; clearInterval(tickTimer); $('#out').innerHTML = ''; };
-    $('#sendgo').onclick = () => sendNow([...pick.values()].filter((c) => c.on).map(({ jid, post, pin, dm, anon }) => ({ jid, post, pin, dm, anon })));
-    for (const c of pick.values()) if (c.on) fetchPreview(c);
-    paint();
+  const box = (jid) => document.querySelector(`.sendg[data-jid="${CSS.escape(jid)}"]`);
+  const want = (c) => `${c.anon ? 1 : 0}${c.dm ? 1 : 0}`;
+  const shown = new Map();
+  const asked = new Map();
+  let chain = Promise.resolve();
+  const refreshGo = () => {
+    const on = [...pick.values()].filter((c) => c.on);
+    const missing = on.filter((c) => shown.get(c.jid) !== want(c));
+    const empty = on.some((c) => !c.post && !c.dm);
+    $('#sendgo').disabled = !on.length || empty || missing.length > 0 || !!S.run?.running;
+    $('#sendgo').textContent = !on.length ? 'Tick a group to send to'
+      : empty ? 'Each group needs Post or Message'
+        : missing.length ? `Open the preview of ${missing.length === 1 ? 'the ticked group' : `all ${missing.length} ticked groups`} first`
+          : `Send to ${on.length} group${on.length > 1 ? 's' : ''}`;
   };
-  const sendNow = async (jids) => {
-    if (!jids.length) return showErr('#senderr', 'Tick at least one group.');
-    try { await api('/run', { groups: jids }); } catch (e) { $('#out').innerHTML = note(e.message, 'bad'); return; }
+  const fetchPreview = (c) => {
+    const k = want(c);
+    if (asked.get(c.jid) === k) return;
+    asked.set(c.jid, k);
+    const el = box(c.jid).querySelector('.bubble');
+    el.innerHTML = `<span class="spin"></span>${S.mode === 'digest' ? 'Reading messages…' : 'Reading every message and writing the summary. This usually takes a minute or two.'}`;
+    chain = chain.then(() => (view === 'home' && want(c) === k ? api(`/preview?group=${encodeURIComponent(c.jid)}&anon=${c.anon ? 1 : 0}&dm=${c.dm ? 1 : 0}`) : null)).then((r) => {
+      if (!r || view !== 'home' || want(c) !== k) return;
+      el.innerHTML = waFormat(r.previews[0].text);
+      shown.set(c.jid, k);
+      refreshGo();
+    }).catch((e) => { asked.delete(c.jid); el.innerHTML = ''; showErr('#senderr', e.message); });
+  };
+  const paint = () => {
+    for (const c of pick.values()) {
+      const b = box(c.jid);
+      b.querySelector('.gsum').textContent = [c.post && 'Post', c.post && c.pin && 'pin', c.dm && 'message members', c.anon && 'names hidden'].filter(Boolean).join(', ').replace(/^./, (x) => x.toUpperCase()) || 'Nothing switched on';
+      b.querySelectorAll('.tog').forEach((t) => { t.classList.toggle('on', !!c[t.dataset.k]); t.setAttribute('aria-pressed', !!c[t.dataset.k]); });
+      if (b.querySelector('details').open && shown.get(c.jid) !== want(c)) fetchPreview(c);
+    }
+    refreshGo();
+  };
+  document.querySelectorAll('#sendlist details').forEach((d) => d.ontoggle = () => { if (d.open) paint(); });
+  document.querySelectorAll('#sendlist input').forEach((i) => i.onchange = () => { pick.get(i.dataset.jid).on = i.checked; paint(); });
+  document.querySelectorAll('#sendlist .tog').forEach((t) => t.onclick = () => {
+    const c = pick.get(t.dataset.jid);
+    const k = t.dataset.k;
+    c[k] = !c[k];
+    if (k === 'post' && !c.post) c.pin = false;
+    if (k === 'pin' && c.pin) c.post = true;
+    paint();
+  });
+  $('#sendgo').onclick = () => sendNow([...pick.values()].filter((c) => c.on).map(({ jid, post, pin, dm, anon }) => ({ jid, post, pin, dm, anon })));
+  const sendNow = async (groups) => {
+    if (!groups.length) return showErr('#senderr', 'Tick at least one group.');
+    $('#sendgo').disabled = true;
+    try { await api('/run', { groups }); } catch (e) { $('#out').innerHTML = note(e.message, 'bad'); refreshGo(); return; }
     clearInterval(pollTimer);
     const say = waiting($('#out'), 'Starting', 'This takes a few minutes. Private messages go out slowly on purpose, so WhatsApp stays happy.');
     pollTimer = setInterval(async () => {
@@ -585,7 +564,7 @@ function viewHome() {
       $('#out').innerHTML = `<p class="note ${r.error ? 'bad' : 'good'}" style="display:block">${lines.map(esc).join('<br>') || 'Sent'}</p>`;
     }, 1500);
   };
-  $('#prev').onclick = () => loadPreview(false);
+  paint();
 }
 
 function showErr(sel, msg) { const el = $(sel); el.textContent = msg; el.classList.remove('hidden'); }
