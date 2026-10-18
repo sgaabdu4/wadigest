@@ -88,6 +88,13 @@
   .bubble { background: var(--bubble); color: var(--ink); border-radius: 14px 14px 4px 14px; padding: 12px 14px; font-size: 14.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
   .bubble a { color: var(--sage-2); }
   .pvname { font-size: 13px; color: var(--ink-3); margin: 22px 0 0; text-align: center; }
+  details.pv { margin-top: 14px; }
+  details.pv > summary { cursor: pointer; list-style: none; text-align: center; font-size: 14px; color: var(--sage-2); padding: 6px 0; }
+  details.pv > summary::-webkit-details-marker { display: none; }
+  details.pv > summary::before { content: "▸ "; }
+  details.pv[open] > summary::before { content: "▾ "; }
+  details.pv > .phone { margin-top: 8px; }
+  .sendg { margin: 2px 0 14px; }
   details.more { margin-top: 26px; color: var(--ink-3); font-size: 13px; text-align: center; }
   details.more summary { cursor: pointer; }
   .log { font-family: var(--mono); font-size: 12px; text-align: left; background: var(--card); border-radius: 12px; padding: 10px 12px; max-height: 160px; overflow: auto; white-space: pre-wrap; margin-top: 10px; }
@@ -466,6 +473,7 @@ function viewHome() {
     ${running ? `<p class="next">${esc(S.nextRun)}</p>` : '<p class="center" style="margin:18px 0 30px"><button class="btn" id="startsvc">Start again</button></p>'}
     <div class="row">
       <button class="btn soft" id="runnow">Send now</button>
+      <button class="btn soft" id="prev">Preview</button>
       <button class="btn soft" id="invite">Invite</button>
     </div>
     <div id="out"></div>
@@ -477,14 +485,16 @@ function viewHome() {
   });
   if ($('#startsvc')) $('#startsvc').onclick = async () => { busy($('#startsvc')); try { await api('/start', {}); await refresh(); viewHome(); } catch (e) { $('#out').innerHTML = note(e.message, 'bad'); } };
   let previewSeq = 0;
+  let previews = null;
+  const getPreviews = (fresh) => (previews && !fresh ? previews : (previews = api(fresh ? '/preview?fresh=1' : '/preview').then((r) => r.previews).catch((e) => { previews = null; throw e; })));
   const loadPreview = async (fresh) => {
     const seq = ++previewSeq;
     waiting($('#out'), S.mode === 'digest' ? 'Reading messages' : 'Reading every message and writing the summary', S.mode === 'digest' ? '' : 'This usually takes a minute or two. Nothing is sent.');
     try {
-      const r = await api(fresh ? '/preview?fresh=1' : '/preview');
+      const list = await getPreviews(fresh);
       if (seq !== previewSeq || view !== 'home') return;
       clearInterval(tickTimer);
-      $('#out').innerHTML = r.previews.map((p) => `<p class="pvname">${esc(p.name)}</p><div class="phone"><div class="bubble">${waFormat(p.text)}</div></div>`).join('') + '<p class="center"><button class="btn link" id="reprev">Refresh</button></p>';
+      $('#out').innerHTML = list.map((p, i) => `<details class="pv"${i === 0 ? ' open' : ''}><summary>${esc(p.name)} <span class="hint">(${p.messages} messages)</span></summary><div class="phone"><div class="bubble">${waFormat(p.text)}</div></div></details>`).join('') + '<p class="center"><button class="btn link" id="reprev">Refresh</button></p>';
       $('#reprev').onclick = () => loadPreview(true);
     } catch (e) { if (seq === previewSeq) $('#out').innerHTML = note(e.message, 'bad'); }
   };
@@ -499,12 +509,66 @@ function viewHome() {
   $('#runnow').onclick = () => {
     previewSeq++;
     clearInterval(tickTimer);
-    $('#out').innerHTML = `<p class="pvname">Send now to</p><div id="sendlist">${S.groups.map((g) => `<label class="grow"><input type="checkbox" data-jid="${esc(g.jid)}" ${g.sentToday ? '' : 'checked'}><span class="tick"></span><span>${esc(g.name)}${g.sentToday ? ` <span class="hint">(already sent today at ${esc(g.sentToday)})</span>` : ''}</span></label>`).join('')}</div>
+    const seq = previewSeq;
+    const pick = new Map(S.groups.map((g) => [g.jid, { jid: g.jid, on: !g.sentToday, post: g.post !== false, pin: !!S.pin && g.post !== false && g.pin !== false, dm: g.dm !== false, anon: g.anon === true }]));
+    const opts = (g) => [['post', 'Post in the group'], ...(S.pin ? [['pin', 'Pin it']] : []), ['dm', 'Message each member'], ['anon', 'Anonymise members']]
+      .map(([k, t]) => `<button class="tog" data-jid="${esc(g.jid)}" data-k="${k}">${t}</button>`).join('');
+    $('#out').innerHTML = `<p class="pvname">Tick the groups to send to. The choices under each group are for this send only.</p><div id="sendlist">${S.groups.map((g) => `
+      <label class="grow"><input type="checkbox" data-jid="${esc(g.jid)}" ${pick.get(g.jid).on ? 'checked' : ''}><span class="tick"></span><span>${esc(g.name)}${g.sentToday ? ` <span class="hint">(already sent today at ${esc(g.sentToday)})</span>` : ''}</span></label>
+      <div class="sendg" data-jid="${esc(g.jid)}"><div class="toggles">${opts(g)}</div>
+      <details class="pv"><summary>Show what ${esc(g.name)} gets</summary><div class="phone"><div class="bubble"></div></div></details></div>`).join('')}</div>
       <div id="senderr" class="err hidden"></div>
-      <button class="btn wide" id="sendgo" style="margin-top:18px">Send</button>
+      <button class="btn wide" id="sendgo" style="margin-top:18px" disabled>Waiting for the previews</button>
       <p class="center" style="margin-top:10px"><button class="btn link" id="sendcancel">Cancel</button></p>`;
-    $('#sendcancel').onclick = () => loadPreview(false);
-    $('#sendgo').onclick = () => sendNow([...document.querySelectorAll('#sendlist input:checked')].map((c) => c.dataset.jid));
+    const box = (jid) => document.querySelector(`.sendg[data-jid="${CSS.escape(jid)}"]`);
+    const want = (c) => `${c.anon ? 1 : 0}${c.dm ? 1 : 0}`;
+    const shown = new Map();
+    let chain = Promise.resolve();
+    const refreshGo = () => {
+      const on = [...pick.values()].filter((c) => c.on);
+      const ready = on.length > 0 && on.every((c) => shown.get(c.jid) === want(c));
+      const empty = on.some((c) => !c.post && !c.dm);
+      $('#sendgo').disabled = !ready || empty;
+      $('#sendgo').textContent = !on.length ? 'Tick a group to send to' : empty ? 'Each group needs Post or Message' : ready ? `Send to ${on.length} group${on.length > 1 ? 's' : ''}` : 'Waiting for the previews';
+    };
+    const fetchPreview = (c) => {
+      const k = want(c);
+      const el = box(c.jid).querySelector('.bubble');
+      el.innerHTML = '<span class="spin"></span>Writing the preview…';
+      chain = chain.then(() => (seq === previewSeq && want(c) === k ? api(`/preview?group=${encodeURIComponent(c.jid)}&anon=${c.anon ? 1 : 0}&dm=${c.dm ? 1 : 0}`) : null)).then((r) => {
+        if (!r || seq !== previewSeq || want(c) !== k) return;
+        el.innerHTML = waFormat(r.previews[0].text);
+        shown.set(c.jid, k);
+        refreshGo();
+      }).catch((e) => { if (seq === previewSeq) showErr('#senderr', e.message); });
+    };
+    const paint = () => {
+      for (const c of pick.values()) {
+        const b = box(c.jid);
+        b.style.display = c.on ? '' : 'none';
+        b.querySelectorAll('.tog').forEach((t) => { t.classList.toggle('on', !!c[t.dataset.k]); t.setAttribute('aria-pressed', !!c[t.dataset.k]); });
+      }
+      refreshGo();
+    };
+    document.querySelectorAll('#sendlist input').forEach((i) => i.onchange = () => {
+      const c = pick.get(i.dataset.jid);
+      c.on = i.checked;
+      if (c.on && shown.get(c.jid) !== want(c)) fetchPreview(c);
+      paint();
+    });
+    document.querySelectorAll('#sendlist .tog').forEach((t) => t.onclick = () => {
+      const c = pick.get(t.dataset.jid);
+      const k = t.dataset.k;
+      c[k] = !c[k];
+      if (k === 'post' && !c.post) c.pin = false;
+      if (k === 'pin' && c.pin) c.post = true;
+      if (shown.get(c.jid) !== want(c)) fetchPreview(c);
+      paint();
+    });
+    $('#sendcancel').onclick = () => { previewSeq++; clearInterval(tickTimer); $('#out').innerHTML = ''; };
+    $('#sendgo').onclick = () => sendNow([...pick.values()].filter((c) => c.on).map(({ jid, post, pin, dm, anon }) => ({ jid, post, pin, dm, anon })));
+    for (const c of pick.values()) if (c.on) fetchPreview(c);
+    paint();
   };
   const sendNow = async (jids) => {
     if (!jids.length) return showErr('#senderr', 'Tick at least one group.');
@@ -521,7 +585,7 @@ function viewHome() {
       $('#out').innerHTML = `<p class="note ${r.error ? 'bad' : 'good'}" style="display:block">${lines.map(esc).join('<br>') || 'Sent'}</p>`;
     }, 1500);
   };
-  if (!S.run?.running) loadPreview(false);
+  $('#prev').onclick = () => loadPreview(false);
 }
 
 function showErr(sel, msg) { const el = $(sel); el.textContent = msg; el.classList.remove('hidden'); }

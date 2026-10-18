@@ -149,12 +149,39 @@ export class Wacli {
       }
       return out;
     };
+    let rows;
     try {
-      return await fetchAll(limit);
+      rows = await fetchAll(limit);
     } catch (err) {
-      if (/cursor/i.test(err.message)) return fetchAll(50_000);
-      throw err;
+      if (!/cursor/i.test(err.message)) throw err;
+      rows = await fetchAll(50_000);
     }
+    // Show the name each person set in WhatsApp, never the name saved in this phone's contacts.
+    const own = await this.ownNames();
+    return own ? rows.map((m) => (m.FromMe ? m : { ...m, SenderName: own.get(String(m.SenderJID || '').replace(/:\d+@/, '@')) || '' })) : rows;
+  }
+
+  /** jid -> the name the person chose in WhatsApp (their "push name"), from WhatsApp's own store. Null if unreadable. */
+  async ownNames() {
+    if (this.ownNamesCache && Date.now() - this.ownNamesCache.at < 10 * 60_000) return this.ownNamesCache.names;
+    let names = null;
+    const file = path.join(this.store, 'session.db');
+    if (fs.existsSync(file)) {
+      try {
+        const { DatabaseSync } = await import('node:sqlite');
+        const db = new DatabaseSync(file, { readOnly: true });
+        try {
+          names = new Map();
+          for (const r of db.prepare("SELECT their_jid AS jid, push_name AS name FROM whatsmeow_contacts WHERE push_name <> ''").all()) names.set(r.jid, r.name);
+          for (const r of db.prepare('SELECT lid, pn FROM whatsmeow_lid_map').all()) {
+            const n = names.get(`${r.pn}@s.whatsapp.net`);
+            if (n) names.set(`${r.lid}@lid`, n);
+          }
+        } finally { db.close(); }
+      } catch { names = null; }
+    }
+    this.ownNamesCache = { at: Date.now(), names };
+    return names;
   }
 
   async sendText(to, message) {

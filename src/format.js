@@ -67,6 +67,8 @@ function period(digest) {
 }
 
 /** @param {object} digest the summary contract (see summary.js) */
+const SIGNATURE = 'Made with wadigest: github.com/sgaabdu4/wadigest';
+
 export function renderGroupPost(digest, { timeZone, audience = 'everyone' } = {}) {
   const s = digest.stats || {};
   const head = [
@@ -82,7 +84,7 @@ export function renderGroupPost(digest, { timeZone, audience = 'everyone' } = {}
     : audience === 'opted-in'
       ? '_Want your own copy with your interests first? Send *!digest join agents, n8n*_'
       : '');
-  return [head.join('\n'), body, foot].filter(Boolean).join('\n\n');
+  return [head.join('\n'), body, foot, SIGNATURE].filter(Boolean).join('\n\n');
 }
 
 /** Personal version: interest matches first (⭐), then the rest, plus up to 3 extra matches from beyond the top list. */
@@ -116,5 +118,5 @@ export function renderPersonal(digest, member, { timeZone } = {}) {
     for (const { it, matched } of extras) blocks.push(renderItem(it, ++n, { star: true, matched }));
   }
   if (!blocks.length) blocks.push('All quiet, nothing stood out. 🌙');
-  return [head.join('\n'), blocks.join('\n\n'), '_Reply *!digest interests …* to change topics, *!digest stop* to stop these._'].join('\n\n');
+  return [head.join('\n'), blocks.join('\n\n'), '_Reply *!digest interests …* to change topics, *!digest stop* to stop these._', SIGNATURE].join('\n\n');
 }

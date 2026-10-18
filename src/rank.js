@@ -35,9 +35,7 @@ export function displayName(m) {
   if (m.Anon) return m.SenderName;
   const n = String(m.SenderName || '').trim();
   if (n && !/^\+?\d{6,}$/.test(n)) return n;
-  if (m.FromMe) return 'me';
-  const user = String(m.SenderJID || '').split('@')[0];
-  return n || (user ? `+${user.slice(0, 4)}…${user.slice(-2)}` : 'someone');
+  return '';
 }
 
 /** Final reaction per (reactor, target): later reactions replace earlier ones; empty emoji removes. */

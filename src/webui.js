@@ -75,9 +75,10 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
   };
   // Send now reuses what Preview just built, so the AI doesn't write the summary twice.
   const previews = new Map();
-  const previewSig = (c, g) => JSON.stringify([groupConfig(c, g), c.mode, c.local, c.claude, c.schedule]);
+  const previewKey = (g) => `${g.jid}|${g.anon === true}`;
+  const previewSig = (c, g) => JSON.stringify([g.jid, g.anon === true, g.addedAt, c.mode, c.local, c.claude, c.schedule, c.topN, c.linkTitles]);
   const cachedPreview = (c, g) => {
-    const p = previews.get(g.jid);
+    const p = previews.get(previewKey(g));
     return p && Date.now() - p.at < 30 * 60_000 && p.sig === previewSig(c, g) ? p : null;
   };
   let groupsCache = null;
@@ -318,15 +319,19 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
         if (!c.groups.length) return send(res, 400, { error: 'Pick a group first.' });
         const state = loadState();
         const out = [];
-        for (const g of c.groups) {
+        const one = url.searchParams.get('group');
+        const flag = (k) => (url.searchParams.has(k) ? url.searchParams.get(k) === '1' : undefined);
+        const list = one ? c.groups.filter((g) => g.jid === one).map((g) => ({ ...g, ...(flag('anon') !== undefined && { anon: flag('anon') }), ...(flag('dm') !== undefined && { dm: flag('dm') }) })) : c.groups;
+        if (!list.length) return send(res, 400, { error: 'That group is not in your list.' });
+        for (const g of list) {
           const gc = groupConfig(c, g);
           let p = url.searchParams.get('fresh') ? null : cachedPreview(c, g);
           if (!p) {
             const { digest, messages, notes } = await prepareDigest({ cfg: gc, state, wacli: new Wacli(c), window: rollingWindow(new Date(), readDays(c.schedule)), videos: false });
             p = { at: Date.now(), sig: previewSig(c, g), prepared: { digest, messages, notes } };
-            previews.set(g.jid, p);
+            previews.set(previewKey(g), p);
           }
-          out.push({ name: g.name, messages: p.prepared.messages, text: renderGroupPost(p.prepared.digest, { timeZone: c.schedule.timezone, audience: gc.dms.audience }) });
+          out.push({ jid: g.jid, name: g.name, messages: p.prepared.messages, text: renderGroupPost(p.prepared.digest, { timeZone: c.schedule.timezone, audience: gc.dms.audience }) });
         }
         return send(res, 200, { previews: out });
       }
@@ -334,8 +339,13 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
       if (route === '/api/run' && req.method === 'POST') {
         const c = loadConfig();
         const body = await readBody(req);
-        const only = Array.isArray(body.groups) ? new Set(body.groups) : null;
-        const groups = only ? c.groups.filter((g) => only.has(g.jid)) : c.groups;
+        // Send now may change post / pin / DM / anonymise for this one send; saved settings stay as they are.
+        const groups = Array.isArray(body.groups)
+          ? body.groups.map((x) => {
+            const saved = c.groups.find((g) => g.jid === (typeof x === 'string' ? x : x?.jid));
+            return saved && (typeof x === 'string' ? saved : { ...saved, post: !!x.post, pin: !!x.pin && !!x.post, dm: !!x.dm, anon: !!x.anon });
+          }).filter(Boolean)
+          : c.groups;
         if (!groups.length) return send(res, 400, { error: 'Pick at least one group to send to.' });
         if (run.running) return send(res, 200, { ok: true });
         Object.assign(run, { running: true, done: 0, total: groups.length, log: [], error: '' });
@@ -349,7 +359,7 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
               let n = 0;
               const prepared = cachedPreview(c, g)?.prepared;
               run.log.push(`${g.name}: ${prepared ? 'sending the summary you previewed' : 'reading messages'}`);
-              previews.delete(g.jid);
+              previews.delete(previewKey(g));
               const r = await runGroupNow({ cfg: c, group: g, state, wacli: new Wacli(c), onProgress, prepared, onDm: (m, ok) => run.log.push(`${g.name}: ${ok ? 'sent' : 'could not send'} private message ${++n}`) });
               run.log.push(`${g.name}: done${r.group ? ', posted' : ''}${r.pinned ? ' and pinned' : ''}${g.dm !== false ? `, ${r.dms.filter((d) => d.ok).length} DMs sent` : ''}`);
             } catch (e) { run.error = `${g.name}: ${e.message}`; run.log.push(run.error); }

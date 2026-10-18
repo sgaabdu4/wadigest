@@ -71,6 +71,11 @@ Members can reply to wadigest by private message, or send in the group:
 
 **Invite** on the home screen shows a QR code. Anyone can scan it with their phone camera, then press send in WhatsApp to sign up.
 
+
+**Send now** sends a summary at once. You tick the groups, and for each one you can change post, pin, private messages and anonymise for this send only. You see each group's summary before the Send button works. A group that already got its summary today starts unticked.
+
+Each summary ends with a short line: *Made with wadigest: github.com/sgaabdu4/wadigest*.
+
 ## How the summary is written
 
 You choose in the sentence: *written simply*, *with local AI* or *with Claude*. You can change it any time.
@@ -114,6 +119,7 @@ wadigest doctor         # check everything is working
 - wadigest opens the links people share, to read their titles and text.
 - Only with Claude does the chat leave your computer, to Anthropic.
 - The AI never gets names or phone numbers. See below.
+- Summaries show the name each person set in WhatsApp. They never show the names saved in your phone's contacts.
 - To remove it, run `bash scripts/uninstall.sh` in the wadigest folder (`~/.wadigest/app` if you used the one command), then remove the device in WhatsApp under Linked devices.
 
 ### What the AI sees
