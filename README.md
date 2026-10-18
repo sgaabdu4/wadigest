@@ -133,7 +133,6 @@ No runtime dependencies, just Node 20 or later. `npm test` runs the tests agains
 
 ## Credits
 
-- Built at the Developer Bros hackathon.
 - [wacli](https://github.com/openclaw/wacli) by openclaw, MIT licence. [llama.cpp](https://github.com/ggml-org/llama.cpp) and [Qwen3](https://huggingface.co/Qwen) for local AI.
 - WhatsApp is a trademark of Meta. Claude is a trademark of Anthropic. wadigest is not affiliated with either.
 - Screenshots use sample groups and names.
