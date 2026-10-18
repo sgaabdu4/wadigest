@@ -67,6 +67,10 @@ else switch (cmd) {
     out({ messages: page, fts: false, page: { has_more: hasMore, next_cursor: hasMore ? Buffer.from(String(offset + limit)).toString('base64') : null }, source: { last_sync_at: new Date().toISOString(), scope: 'local_archive' } });
     break;
   }
+  case 'messages delete':
+    fs.appendFileSync(path.join(dir, 'sent.jsonl'), JSON.stringify({ deleted: flags.id, chat: flags.chat, forMe: argv.includes('--for-me') }) + '\n');
+    out({ deleted: true, id: flags.id });
+    break;
   case 'send text': {
     const id = `SENT${Date.now()}${Math.floor(Math.random() * 1e6)}`;
     fs.appendFileSync(path.join(dir, 'sent.jsonl'), JSON.stringify({ to: flags.to, message: flags.message, id }) + '\n');

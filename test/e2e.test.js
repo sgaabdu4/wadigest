@@ -52,9 +52,9 @@ test('deliver: posts once to the group, DMs active members except self, records 
   const sb = sandbox({ messages: weekOfMessages(30) });
   const cfg = setupCfg();
   saveMembers([
-    { jid: '447700000001@s.whatsapp.net', name: 'Sam', interests: ['tool-20'], active: true },
-    { jid: '447700000002@s.whatsapp.net', name: 'Ali', interests: [], active: false },
-    { jid: '447000000001@s.whatsapp.net', name: 'Me', interests: [], active: true }, // linked number
+    { jid: '447700000001@s.whatsapp.net', name: 'Sam', interests: ['tool-20'], active: true, groups: [GROUP] },
+    { jid: '447700000002@s.whatsapp.net', name: 'Ali', interests: [], active: false, groups: [GROUP] },
+    { jid: '447000000001@s.whatsapp.net', name: 'Me', interests: [], active: true, groups: [GROUP] }, // linked number
   ]);
   const state = loadState();
   const wacli = new Wacli(cfg);
@@ -253,5 +253,8 @@ test('a group\'s summary only goes to people in that group', async () => {
   const famDms = dms.filter((x) => /family\.example/.test(x.message));
   const devDms = dms.filter((x) => /dev\.example/.test(x.message));
   assert.deepEqual([...new Set(famDms.map((x) => x.to))], ['447700000032@s.whatsapp.net'], 'Family summary only to Family members');
+  const deleted = sb.sent().filter((x) => x.deleted);
+  assert.ok(dms.every((d) => deleted.some((x) => x.deleted === d.id && x.chat === d.to && x.forMe)), 'every DM is deleted for me only');
+  assert.ok(!deleted.some((x) => x.chat.endsWith('@g.us')), 'group posts are kept');
   assert.ok(devDms.every((x) => x.to !== '447700000032@s.whatsapp.net'), 'no Family member gets the dev summary');
 });

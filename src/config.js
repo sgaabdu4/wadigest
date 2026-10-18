@@ -49,7 +49,8 @@ export function defaultConfig() {
     claude: { command: 'claude', model: '' },
     // audience: everyone = every group member gets the digest by DM (minus anyone who sent !digest stop),
     // opted-in = only people who sent !digest join, off = group post only.
-    dms: { enabled: true, audience: 'everyone', minDelaySec: 8, maxDelaySec: 20, maxPerRun: 100 },
+    // deleteForMe: remove each sent DM from the runner's own chats ("delete for me"), so they don't clog the feed.
+    dms: { enabled: true, audience: 'everyone', minDelaySec: 8, maxDelaySec: 20, maxPerRun: 100, deleteForMe: true },
     setupDone: false,
     // Pinning needs the wadigest build of wacli (wacli-fork/), which adds `messages pin`.
     // auto = pin when that's installed. command = custom pin command template (advanced).

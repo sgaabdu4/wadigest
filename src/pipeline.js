@@ -189,6 +189,9 @@ export async function deliver({ cfg, state, wacli, digest, key, noGroup = false,
       try {
         const sent = await wacli.sendText(m.jid, renderPersonal(digest, m, { timeZone }));
         result.dms.push({ jid: m.jid, name: m.name, ok: true, id: sent.id });
+        if (sent.id && cfg.dms?.deleteForMe !== false) {
+          await wacli.deleteForMe(m.jid, sent.id).catch((err) => log.warn(`Couldn't clear the sent DM to ${m.name || m.jid} from your chats: ${err.message}`));
+        }
         onDm?.(m, true);
       } catch (err) {
         result.dms.push({ jid: m.jid, name: m.name, ok: false, error: err.message });

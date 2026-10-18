@@ -176,6 +176,11 @@ export class Wacli {
     return this.run(['messages', 'pin', '--chat', chat, '--id', msgId, '--duration', duration], { timeoutMs: 120_000 });
   }
 
+  /** Remove a message from this account only ("delete for me"); the other person keeps it. */
+  deleteForMe(chat, msgId) {
+    return this.run(['messages', 'delete', '--chat', chat, '--id', msgId, '--for-me'], { timeoutMs: 120_000 });
+  }
+
   /** Download one media file to `outFile` without touching the store (safe while sync runs). */
   async downloadMedia(chat, msgId, outFile) {
     fs.mkdirSync(path.dirname(outFile), { recursive: true });
