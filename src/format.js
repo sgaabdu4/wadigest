@@ -37,7 +37,11 @@ function engagement(item) {
 
 function linkLines(item) {
   const icon = KIND_ICON[item.kind] || '🔗';
-  const urls = item.urls?.length ? item.urls : item.url ? [item.canonicalUrl || item.url] : [];
+  const seen = new Set();
+  const urls = (item.urls?.length ? item.urls : item.url ? [item.canonicalUrl || item.url] : []).filter((u) => {
+    const key = String(u).replace(/\/+$/, '').toLowerCase();
+    return !seen.has(key) && seen.add(key);
+  });
   if (urls.length) return urls.map((u) => `${icon} ${u}`);
   if (item.kind === 'video') return [`${icon} video in the chat${item.sharedAt ? `, ${new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(item.sharedAt))}` : ''}`];
   return [];
@@ -106,7 +110,7 @@ export function renderPersonal(digest, member, { timeZone } = {}) {
   let n = 0;
   const blocks = [];
   for (const { it, matched } of hits) blocks.push(renderItem(it, ++n, { star: true, matched }));
-  for (const { it } of rest) blocks.push(renderItem(it, ++n, { compact: n >= compactAfter(digest) }));
+  for (const { it } of rest) blocks.push(renderItem(it, ++n, { compact: n > compactAfter(digest) }));
   if (extras.length) {
     blocks.push('*Also for you*');
     for (const { it, matched } of extras) blocks.push(renderItem(it, ++n, { star: true, matched }));

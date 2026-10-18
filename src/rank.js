@@ -208,8 +208,11 @@ export function rankMessages(messages) {
       replyMsgs: replies,
       people: people.size,
     });
+    usedAsItem.add(m.MsgID);
     for (const r of replies) usedAsItem.add(r.MsgID);
   }
+  // Replies already shown under a link or thread are not separate items.
+  for (const it of items) for (const r of it.replyMsgs) usedAsItem.add(r.MsgID);
 
   // Anything else with real content counts too, reactions or not: useful context is often quiet.
   for (const m of content) {

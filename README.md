@@ -6,7 +6,7 @@
 
 **The best of your WhatsApp groups, in one calm message.**
 
-Busy group chats bury the good links, videos and conversations. wadigest reads your groups on a schedule, picks the top five, and posts a short summary back into WhatsApp. Nobody has to leave the app.
+Busy group chats bury the good links, videos and conversations. wadigest reads your groups on a schedule, sums up everything that was said and shared, and posts a short summary back into WhatsApp. Nobody has to leave the app.
 
 [![MIT licence](https://img.shields.io/badge/licence-MIT-5e7d6a)](LICENSE)
 ![macOS, Linux, Windows](https://img.shields.io/badge/runs%20on-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-5e7d6a)
@@ -45,7 +45,7 @@ That's it. It runs in the background from then on, and starts again by itself wh
 ## Why wadigest
 
 - **Stays in WhatsApp.** People don't leave WhatsApp for a website, so the summary comes to them.
-- **Short.** The top five links, videos and busy threads, two sentences each, with the links.
+- **Short and complete.** Every topic, a sentence or two each, with the links. Nothing useful is skipped.
 - **Fair ranking.** Reactions, replies and re-shares decide what makes the cut, not who posts most.
 - **Yours.** It runs on your computer. Your messages stay there.
 
@@ -57,7 +57,7 @@ For every group you can switch these on or off:
 | --- | --- |
 | **Post in the group** | The summary is posted in the group chat |
 | **Pin it** | The post is pinned for 7 days, so it stays at the top |
-| **Message each member** | Everyone gets their own copy by private message, with their interests first ⭐ |
+| **Message each member** | Everyone in that group gets their own copy by private message, with their interests first ⭐. The copies are then deleted from your own chats ("delete for me"), so your feed stays clear. |
 
 Members can reply to wadigest by private message, or send in the group:
 
@@ -76,11 +76,11 @@ You choose in the sentence: *written simply*, *with local AI* or *with Claude*. 
 
 | Style | How it works | Good to know |
 | --- | --- | --- |
-| **Simply** (default) | Ranks the messages and builds the summary from them: titles of the linked pages, what people said, and reactions. | No AI, instant, nothing to install. |
-| **With local AI** | The same ranking, then [Ollama](https://ollama.com) with the `llama3.2:3b` model reads the linked pages and writes two sentences per item. | Runs on your computer, nothing leaves it. About a 2 GB download, installed for you. |
-| **With Claude** | The same ranking, then Claude reads the linked pages and writes the summary. It uses [Claude Code](https://claude.com/claude-code) if you have it, or an API key. | The best writing. The top items and their page text are sent to Anthropic. |
+| **Simply** (default) | Lists everything shared in the period, busiest first: every link with its page title, every video, every busy thread and every substantial message. | No AI, instant, nothing to install. |
+| **With local AI** | A small model that comes with wadigest ([Qwen3 1.7B](https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF), run by [llama.cpp](https://github.com/ggml-org/llama.cpp)) reads every message and writes the summary. | Runs on your computer, nothing leaves it. About a 1.3 GB download, once, checked against its published checksum. Around 20 to 30 seconds per group. |
+| **With Claude** | Claude Haiku reads every message and writes the summary. It uses [Claude Code](https://claude.com/claude-code) if you have it, or an API key. | The best writing. The chat and linked page text are sent to Anthropic. |
 
-If an AI style fails for any reason, the simple summary goes out instead, so a summary always arrives.
+The AI styles read every message, not just the popular ones: reactions only decide the order. Long chats are summarised in parts, then the parts are summarised again. Summaries are short, plain English (close to ASD-STE100), never invent topics, and only keep links that were really shared. If an AI style fails for any reason, the simple summary goes out instead, so a summary always arrives.
 
 You can also write the summary somewhere else: `wadigest export --prompt` gives you the week's items and a ready-made prompt, and `wadigest run --summary summary.json` posts what comes back.
 
@@ -111,7 +111,7 @@ wadigest doctor         # check everything is working
 
 - Everything stays in `~/.wadigest` on your computer: the linked WhatsApp session, settings and logs.
 - wadigest opens the links people share, to read their titles and text.
-- Only with Claude do the top items leave your computer, to Anthropic.
+- Only with Claude does the chat leave your computer, to Anthropic.
 - To remove it, run `bash scripts/uninstall.sh` in the wadigest folder (`~/.wadigest/app` if you used the one command), then remove the device in WhatsApp under Linked devices.
 
 ## Good to know
@@ -134,7 +134,7 @@ No runtime dependencies, just Node 20 or later. `npm test` runs the tests agains
 ## Credits
 
 - Built at the Developer Bros hackathon.
-- [wacli](https://github.com/openclaw/wacli) by openclaw, MIT licence. [Ollama](https://ollama.com) for local AI.
+- [wacli](https://github.com/openclaw/wacli) by openclaw, MIT licence. [llama.cpp](https://github.com/ggml-org/llama.cpp) and [Qwen3](https://huggingface.co/Qwen) for local AI.
 - WhatsApp is a trademark of Meta. Claude is a trademark of Anthropic. wadigest is not affiliated with either.
 - Screenshots use sample groups and names.
 
