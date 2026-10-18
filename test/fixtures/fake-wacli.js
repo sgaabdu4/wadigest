@@ -51,7 +51,7 @@ else switch (cmd) {
     break;
   }
   case 'groups participants list':
-    out(read('participants.json', []));
+    out(read('participants.json', []).filter((p) => !flags.jid || !p.group_jid || p.group_jid === flags.jid));
     break;
   case 'messages list': {
     let ms = read('messages.json', []);

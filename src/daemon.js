@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import { loadConfig, loadState, saveState, paths, groupConfig } from './config.js';
 import { Wacli } from './wacli.js';
 import { parseCommand, applyCommand } from './commands.js';
-import { loadMembers, saveMembers } from './members.js';
+import { loadMembers, saveMembers, findMember, addGroups } from './members.js';
 import { decide, windowFor, readDays } from './schedule.js';
 import { prepareDigest, deliver } from './pipeline.js';
 import { processVideos } from './video.js';
@@ -26,7 +26,11 @@ export async function processCommands({ cfg, state, wacli, now = new Date() }) {
   const msgs = await wacli.listMessages({ after: new Date(since) });
   const handled = new Set(state.handledCommandIds || []);
   const members = loadMembers();
-  let participants = null;
+  const byGroup = new Map(); // group jid -> Set of member user ids
+  const usersOf = async (g) => {
+    if (!byGroup.has(g.jid)) byGroup.set(g.jid, new Set((await wacli.participants(g.jid).catch(() => [])).map((p) => jidUser(p.jid))));
+    return byGroup.get(g.jid);
+  };
   let count = 0;
   let membersChanged = false;
 
@@ -43,16 +47,25 @@ export async function processCommands({ cfg, state, wacli, now = new Date() }) {
     const senderJid = m.SenderJID || m.ChatJID;
     const replyTo = isDm ? m.ChatJID : senderJid;
 
+    const me = [jidUser(senderJid), jidUser(m.ChatJID)];
+    const memberOf = group ? [group.jid] : [];
+    if (isDm) {
+      for (const g of groups) {
+        const users = await usersOf(g);
+        if (me.some((u) => u && users.has(u))) memberOf.push(g.jid);
+      }
+    }
     if (isDm && cmd.verb === 'join') {
-      participants ??= (await Promise.all(groups.map((g) => wacli.participants(g.jid).catch(() => [])))).flat();
-      const users = new Set(participants.map((p) => jidUser(p.jid)));
-      if (users.size && !users.has(jidUser(senderJid)) && !users.has(jidUser(m.ChatJID))) {
+      const known = (await Promise.all(groups.map(usersOf))).some((s) => s.size);
+      if (known && !memberOf.length) {
         await safeSend(wacli, replyTo, `This digest is for members of ${groups.map((g) => g.name || 'the group').join(', ')}. Send *!digest join …* inside the group to opt in.`);
         continue;
       }
     }
     const groupName = (group || (groups.length === 1 ? groups[0] : null))?.name || '';
     const res = applyCommand(cmd, { senderJid, senderName: m.SenderName || '' }, members, { groupName, schedule: cfg.schedule });
+    const who = findMember(members, senderJid);
+    if (who && memberOf.length) { addGroups(who, memberOf); membersChanged = true; }
     if (res.changed) membersChanged = true;
     log.info(`!digest ${cmd.verb} from ${m.SenderName || senderJid}${inGroup ? ' (group)' : ' (DM)'}`);
     await safeSend(wacli, replyTo, res.reply);

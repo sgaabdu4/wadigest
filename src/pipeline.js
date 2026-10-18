@@ -108,17 +108,22 @@ function runPinCommand(template, vars) {
 }
 
 /**
- * Who gets a DM. "everyone": every participant in the group's member list (from wacli),
- * using their saved interests if they set any, minus anyone who opted out.
- * "opted-in": only people who sent !digest join.
+ * Who gets this group's DM: only people in this group. "everyone": every participant in the
+ * group's member list (from wacli), with their saved interests, minus anyone who opted out.
+ * "opted-in": only participants who sent !digest join. If WhatsApp's member list can't be read,
+ * only members already known to be in this group are used.
  */
 export async function dmRecipients(cfg, wacli) {
   const members = loadMembers();
   const audience = cfg.dms?.audience || 'everyone';
   if (audience === 'off') return [];
-  if (audience === 'opted-in') return members.filter((m) => m.active);
   let participants = [];
   try { participants = await wacli.participants(cfg.group.jid); } catch (err) { log.warn(`Couldn't read the group's member list: ${err.message}`); }
+  const users = new Set(participants.map((p) => jidUser(p.jid)).filter(Boolean));
+  const inThisGroup = (m) => (users.size
+    ? users.has(jidUser(m.jid)) || (m.altJids || []).some((a) => users.has(jidUser(a)))
+    : (m.groups || []).includes(cfg.group.jid));
+  if (audience === 'opted-in' || !users.size) return members.filter((m) => m.active && inThisGroup(m));
   const out = [];
   const seen = new Set();
   for (const p of participants) {
@@ -129,8 +134,6 @@ export async function dmRecipients(cfg, wacli) {
     if (m && m.active === false) continue; // opted out
     out.push(m ? { ...m, jid: m.jid || p.jid } : { jid: p.jid, name: '', interests: [], active: true });
   }
-  // People who opted in but aren't in the (possibly stale) snapshot still get theirs.
-  for (const m of members) if (m.active && !seen.has(jidUser(m.jid))) out.push(m);
   return out;
 }
 

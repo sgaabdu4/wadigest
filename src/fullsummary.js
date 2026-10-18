@@ -66,7 +66,7 @@ ${DATA_RULE}
 
 Write short notes covering everything useful in it. One line per topic:
 - <topic>: what was said or decided, by whom, and how much attention it got. Keep every link that was shared, with its title.
-Include things even if nobody reacted or replied: a single useful message counts, and context matters. Merge lines about the same topic. Only leave out pure greetings, thanks and emoji-only messages. Plain text only.
+Include things even if nobody reacted or replied: a single useful message counts, and context matters. Merge lines about the same topic. Only leave out pure greetings, thanks and emoji-only messages. Write in English, even if the chat is in another language. Plain text only.
 
 <<<
 ${text}
@@ -81,7 +81,7 @@ ${fromNotes ? 'The text is notes made from the full chat.' : 'The text is the fu
 Cover everything useful, not just a few highlights. Reactions and replies only decide the order; a useful message nobody reacted to still belongs in the summary. Only leave out pure greetings, thanks and emoji-only messages.
 - "intro": 2 or 3 plain sentences on what the group talked about overall.
 - "items": one per topic (merge duplicates), busiest first, at most 25. Each has a short "title", a "summary" of 1 to 3 plain sentences (what it is, what people said, any conclusion), the "urls" shared about it (only URLs that appear in the text), and 1 to 3 lowercase "tags".
-No hype, no emojis, no markdown.
+Write in English, even if the chat is in another language. No hype, no emojis, no markdown.
 
 Reply with only this JSON:
 {"version":1,"intro":"…","items":[{"title":"…","summary":"…","urls":["https://…"],"tags":["…"]}]}

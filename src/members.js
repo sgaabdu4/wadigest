@@ -38,6 +38,11 @@ export function upsertMember(list, { jid, name, interests }) {
   return m;
 }
 
+/** Remember which of our groups a member belongs to (used when WhatsApp's member list isn't available). */
+export function addGroups(member, jids) {
+  member.groups = [...new Set([...(member.groups || []), ...jids.filter(Boolean)])];
+}
+
 function stem(word) {
   return word.toLowerCase().replace(/(ies)$/, 'y').replace(/(es|s)$/, '');
 }

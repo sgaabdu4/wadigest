@@ -224,3 +224,34 @@ test('an old single-group config is read as a one-group list', () => {
   assert.equal(cfg.groups[0].dm, false);
   assert.equal(cfg.groups[0].addedAt, '2026-01-01T00:00:00Z');
 });
+
+test('a group\'s summary only goes to people in that group', async () => {
+  const OTHER = '120363000000000002@g.us';
+  const t = new Date(Date.now() - 3600e3).toISOString();
+  const sb = sandbox({
+    messages: [msg({ MsgID: 'A1', Text: 'dev https://dev.example', Timestamp: t }), msg({ MsgID: 'B1', ChatJID: OTHER, Text: 'family https://family.example', Timestamp: t })],
+    participants: [
+      { group_jid: GROUP, user_jid: '447700000031@s.whatsapp.net', role: '' },
+      { group_jid: OTHER, user_jid: '447700000032@s.whatsapp.net', role: '' },
+    ],
+  });
+  const base = ensureConfig();
+  base.groups = [newGroup({ jid: GROUP, name: 'Developer Bros' }), newGroup({ jid: OTHER, name: 'Family' }, { pin: false })];
+  base.linkTitles = false;
+  base.video.enabled = 'off';
+  base.dms.minDelaySec = 0;
+  base.dms.maxDelaySec = 0;
+  saveConfig(base);
+  // Someone who signed up in the dev group only.
+  saveMembers([{ jid: '447700000033@s.whatsapp.net', name: 'Zed', interests: [], active: true, groups: [GROUP] }]);
+  for (const audience of ['everyone', 'opted-in']) {
+    const cfg = loadConfig();
+    cfg.dms.audience = audience;
+    for (const g of cfg.groups) await runGroupNow({ cfg, group: g, state: loadState(), wacli: new Wacli(cfg) });
+  }
+  const dms = sb.sent().filter((x) => x.to && !x.to.endsWith('@g.us'));
+  const famDms = dms.filter((x) => /family\.example/.test(x.message));
+  const devDms = dms.filter((x) => /dev\.example/.test(x.message));
+  assert.deepEqual([...new Set(famDms.map((x) => x.to))], ['447700000032@s.whatsapp.net'], 'Family summary only to Family members');
+  assert.ok(devDms.every((x) => x.to !== '447700000032@s.whatsapp.net'), 'no Family member gets the dev summary');
+});

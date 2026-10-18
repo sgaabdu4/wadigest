@@ -13,7 +13,9 @@ It takes about 10 minutes, once.
      `curl -fsSL https://raw.githubusercontent.com/sgaabdu4/wadigest/main/get.sh | bash`
    - Windows: open **PowerShell**, paste this line and press Enter:
      `irm https://raw.githubusercontent.com/sgaabdu4/wadigest/main/get.ps1 | iex`
-   - Or, if someone gave you the folder: double-click **Start wadigest**. On a Mac, if it says it can't open it, right-click it, choose **Open**, then **Open** again.
+   - Or, if someone gave you the folder: double-click **Start wadigest**.
+     - Mac says it can't open it? Right-click it, choose **Open**, then **Open** again.
+     - Windows says "Windows protected your PC"? Click **More info**, then **Run anyway**.
 2. **A page opens in your browser.** If it says "Getting ready", wait. Leave the Terminal or PowerShell window open.
 3. **Scan the code.** On your phone, open WhatsApp, then Settings, Linked devices, Link a device. Point the phone at the code on the page.
 4. **Tick your groups**, then press **Continue**.
