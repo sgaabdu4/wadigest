@@ -6,3 +6,5 @@ release/
 # runtime data lives in ~/.wadigest, never in the repo
 .wadigest/
 wacli-store/
+
+demo/

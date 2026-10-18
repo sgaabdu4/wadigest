@@ -44,7 +44,7 @@ export function defaultConfig() {
     // digest = simple summary, no AI. local = a small model bundled with wadigest (llama.cpp). claude = Claude (claude -p
     // or API key). summary-file = use a summary another tool drops at summary.path.
     mode: 'digest',
-    local: { model: 'lfm2.5-1.2b' }, // lfm2.5-1.2b (731 MB) or qwen3-1.7b (1.3 GB)
+    local: { model: 'qwen3-1.7b' }, // qwen3-1.7b (1.3 GB, default) or lfm2.5-1.2b (731 MB, faster, vaguer)
     summary: { path: '', waitMinutes: 60 },
     claude: { command: 'claude', model: '' },
     // audience: everyone = every group member gets the digest by DM (minus anyone who sent !digest stop),

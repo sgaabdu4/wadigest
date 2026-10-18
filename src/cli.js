@@ -229,7 +229,7 @@ async function cmdSetup(flags) {
     console.log('\nStep 3/5 · How should it write the digest?');
     const [claude, local] = await Promise.all([detectClaude(), localStatus(cfg)]);
     console.log('  1. Simple summary: ranked by reactions and replies, no AI, nothing to install (recommended)');
-    console.log(`  2. Local AI: runs on this computer, private, about 750 MB to download${local.modelReady ? ' (already installed ✓)' : ''}`);
+    console.log(`  2. Local AI: runs on this computer, private, about 1.3 GB to download${local.modelReady ? ' (already installed ✓)' : ''}`);
     console.log(`  3. Claude: best writing, the week's top items go to Anthropic${claude.cli ? ' (Claude Code found ✓)' : ''}`);
     const current = { digest: '1', local: '2', claude: '3' }[cfg.mode] || '1';
     let pickMode = '';

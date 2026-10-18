@@ -70,12 +70,15 @@ export function mergeSummary(external, base) {
     if (it.url) byUrl.set(it.url, it);
     if (it.canonicalUrl) byUrl.set(it.canonicalUrl, it);
   }
+  const claimed = new Set();
   const items = external.items.map((x, i) => {
     if (!x || typeof x !== 'object') throw new Error(`summary.items[${i}] must be an object`);
     if (!x.title || typeof x.title !== 'string') throw new Error(`summary.items[${i}].title is required`);
     if (x.url && !/^https?:\/\//i.test(x.url)) throw new Error(`summary.items[${i}].url must start with http(s)://`);
     const urls = (Array.isArray(x.urls) ? x.urls : []).filter((u) => typeof u === 'string' && /^https?:\/\//i.test(u));
-    const ranked = (x.id && byId.get(x.id)) || [x.url, ...urls].map((u) => u && byUrl.get(u)).find(Boolean) || {};
+    const found = (x.id && byId.get(x.id)) || [x.url, ...urls].map((u) => u && byUrl.get(u)).find((r) => r && !claimed.has(r.id));
+    const ranked = found && !claimed.has(found.id) ? found : {};
+    if (ranked.id) claimed.add(ranked.id);
     return {
       ...ranked,
       id: x.id || ranked.id || `external:${i}`,

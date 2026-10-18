@@ -39,7 +39,8 @@ export function buildTranscript(messages, { timeZone, linkInfo = new Map(), tran
     const quoted = m.QuotedMsgID && byId.get(m.QuotedMsgID);
     const r = reactions.get(m.MsgID);
     const rx = r ? ` [${[...r].map(([e, n]) => `${e}${n}`).join(' ')}]` : '';
-    lines.push(`[${when.format(new Date(m.Timestamp))}] ${displayName(m)}${quoted ? ` (replying to ${displayName(quoted)})` : ''}: ${truncate(text, 2000)}${rx}`);
+    const who = (x) => (x.FromMe ? 'a member' : displayName(x));
+    lines.push(`[${when.format(new Date(m.Timestamp))}] ${who(m)}${quoted ? ` (replying to ${who(quoted)})` : ''}: ${truncate(text, 2000)}${rx}`);
   }
   return lines;
 }
@@ -118,7 +119,12 @@ export async function summariseAll({ lines, group, days, ask, maxChars, onProgre
   }
   if (text.length > maxChars) text = text.slice(0, maxChars);
   onProgress('writing the summary');
-  const out = extractJson(await ask(finalPrompt(group, text, { fromNotes: rounds > 0, days }), { json: true }));
+  let out;
+  try {
+    out = extractJson(await ask(finalPrompt(group, text, { fromNotes: rounds > 0, days }), { json: true }));
+  } catch {
+    out = extractJson(await ask(finalPrompt(group, text, { fromNotes: rounds > 0, days }), { json: true }));
+  }
   if (!Array.isArray(out.items)) throw new Error('the reply had no items');
   // Only keep links that were really shared: small models shorten or invent them.
   const shared = [...new Set(lines.flatMap((l) => extractUrls(l)))];
@@ -127,8 +133,10 @@ export async function summariseAll({ lines, group, days, ask, maxChars, onProgre
     const c = canonicalUrl(u);
     return shared.find((s) => s === u || canonicalUrl(s) === c) || shared.find((s) => s.startsWith(u.replace(/\/+$/, ''))) || '';
   };
+  const usedUrls = new Set();
   out.items = out.items.filter((x) => x && x.title).slice(0, 10).map((x) => {
-    const urls = [...new Set((Array.isArray(x.urls) ? x.urls : [x.url]).map(real).filter(Boolean))];
+    const urls = [...new Set((Array.isArray(x.urls) ? x.urls : [x.url]).map(real).filter(Boolean))].filter((u) => !usedUrls.has(u));
+    urls.forEach((u) => usedUrls.add(u));
     return { title: String(x.title), summary: String(x.summary || ''), url: urls[0] || '', urls, tags: Array.isArray(x.tags) ? x.tags : [] };
   });
   if (!out.items.length) throw new Error('the reply had no items');

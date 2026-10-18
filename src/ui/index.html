@@ -385,7 +385,7 @@ async function viewSettings() {
     const m = $('#mode').value;
     $('#modex').innerHTML = m === 'claude' && !M.claude.cli && !M.claude.key
       ? '<input id="key" type="password" placeholder="Paste an Anthropic API key" autocomplete="off"><p class="hint" style="margin-top:8px">Claude Code isn’t on this computer, so Claude needs a key.</p>'
-      : m === 'local' && !M.local.ready ? '<p class="hint center">Local AI is about a 750 MB download. It installs when you press Start.</p>' : '';
+      : m === 'local' && !M.local.ready ? '<p class="hint center">Local AI is about a 1.3 GB download. It installs when you press Start.</p>' : '';
   };
   const fit = () => {
     if (CSS.supports('field-sizing', 'content')) return;

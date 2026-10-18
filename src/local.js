@@ -37,7 +37,8 @@ export const MODELS = {
     mb: 1282,
   },
 };
-export const DEFAULT_LOCAL_MODEL = 'lfm2.5-1.2b';
+// Qwen3 1.7B writes clearly better summaries than LFM2.5 1.2B in tests on real group chats, in about 25 s.
+export const DEFAULT_LOCAL_MODEL = 'qwen3-1.7b';
 
 export const platformKey = () => `${process.platform}-${process.arch}`;
 export const llmDir = () => path.join(paths().home, 'llm');
