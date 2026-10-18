@@ -65,7 +65,7 @@ export function notesPrompt(group, part, total, text, fromNotes) {
   return `You are summarising the WhatsApp group "${group}". This is part ${part} of ${total} of ${fromNotes ? 'notes made from the chat' : 'the chat'}.
 ${DATA_RULE}
 
-Write short notes covering everything useful in it. One line per topic:
+Write short notes covering everything useful in it. Only note what is actually in the text; never invent anything. One line per topic:
 - <topic>: what was said or decided, by whom, and how much attention it got. Keep every link that was shared, with its title.
 Include things even if nobody reacted or replied: a single useful message counts, and context matters. Merge lines about the same topic. Only leave out pure greetings, thanks and emoji-only messages. Keep each line short. ${STYLE}
 
@@ -79,6 +79,7 @@ export function finalPrompt(group, text, { fromNotes, days }) {
 ${DATA_RULE}
 ${fromNotes ? 'The text is notes made from the full chat.' : 'The text is the full chat, oldest first. [🔥3] means three people reacted with 🔥.'}
 
+Only write about what is actually in the text. Never invent topics, people or events. If there is little in the text, write little: one item is fine.
 Keep it short and easy to read, but do not drop useful things. Reactions and replies only decide the order; a useful message nobody reacted to still belongs. Only leave out pure greetings, thanks and emoji-only messages.
 - "intro": 1 or 2 short sentences on what the group talked about.
 - "items": one per main topic (merge duplicates), busiest first, at most 8. Each has a short "title" (5 words or fewer), a "summary" of 1 or 2 short sentences, the "urls" shared about it (only URLs that appear in the text), and 1 to 3 lowercase "tags".
@@ -97,8 +98,10 @@ ${text}
  * @param {(prompt: string, opts: {json: boolean}) => Promise<string>} ask  the model call
  * @returns the summary contract (intro + items), ready for mergeSummary
  */
+export const MIN_AI_LINES = 3;
+
 export async function summariseAll({ lines, group, days, ask, maxChars, onProgress = () => {} }) {
-  if (!lines.length) throw new Error('no messages to summarise');
+  if (lines.length < MIN_AI_LINES) throw new Error(`only ${lines.length} message${lines.length === 1 ? '' : 's'}, too few to summarise`);
   let text = lines.join('\n');
   let rounds = 0;
   while (text.length > maxChars && rounds < MAX_ROUNDS) {
@@ -117,8 +120,15 @@ export async function summariseAll({ lines, group, days, ask, maxChars, onProgre
   onProgress('writing the summary');
   const out = extractJson(await ask(finalPrompt(group, text, { fromNotes: rounds > 0, days }), { json: true }));
   if (!Array.isArray(out.items)) throw new Error('the reply had no items');
+  // Only keep links that were really shared: small models shorten or invent them.
+  const shared = [...new Set(lines.flatMap((l) => extractUrls(l)))];
+  const real = (u) => {
+    if (typeof u !== 'string' || !/^https?:\/\//i.test(u)) return '';
+    const c = canonicalUrl(u);
+    return shared.find((s) => s === u || canonicalUrl(s) === c) || shared.find((s) => s.startsWith(u.replace(/\/+$/, ''))) || '';
+  };
   out.items = out.items.filter((x) => x && x.title).slice(0, 10).map((x) => {
-    const urls = (Array.isArray(x.urls) ? x.urls : [x.url]).filter((u) => typeof u === 'string' && /^https?:\/\//i.test(u));
+    const urls = [...new Set((Array.isArray(x.urls) ? x.urls : [x.url]).map(real).filter(Boolean))];
     return { title: String(x.title), summary: String(x.summary || ''), url: urls[0] || '', urls, tags: Array.isArray(x.tags) ? x.tags : [] };
   });
   if (!out.items.length) throw new Error('the reply had no items');

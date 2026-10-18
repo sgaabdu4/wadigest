@@ -41,10 +41,10 @@ export function defaultConfig() {
     // intervals, fixed as start). readDays: how many days each digest covers (0 = everyDays).
     schedule: { day: 'sunday', time: '09:00', timezone: defaultTimezone(), everyDays: 7, readDays: 0, start: '' },
     topN: 0, // simple summary: 0 = everything shared (up to 40); AI summaries always cover the whole chat
-    // digest = simple summary, no AI. local = Ollama on this computer. claude = Claude (claude -p
+    // digest = simple summary, no AI. local = a small model bundled with wadigest (llama.cpp). claude = Claude (claude -p
     // or API key). summary-file = use a summary another tool drops at summary.path.
     mode: 'digest',
-    local: { model: 'llama3.2:3b', url: 'http://127.0.0.1:11434' },
+    local: { model: 'lfm2.5-1.2b' }, // lfm2.5-1.2b (731 MB) or qwen3-1.7b (1.3 GB)
     summary: { path: '', waitMinutes: 60 },
     claude: { command: 'claude', model: '' },
     // audience: everyone = every group member gets the digest by DM (minus anyone who sent !digest stop),

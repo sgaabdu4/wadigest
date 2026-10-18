@@ -229,14 +229,14 @@ async function cmdSetup(flags) {
     console.log('\nStep 3/5 · How should it write the digest?');
     const [claude, local] = await Promise.all([detectClaude(), localStatus(cfg)]);
     console.log('  1. Simple summary: ranked by reactions and replies, no AI, nothing to install (recommended)');
-    console.log(`  2. Local AI: runs on this computer, private, ~2.5 GB download${local.ollama && local.modelReady ? ' (already installed ✓)' : ''}`);
+    console.log(`  2. Local AI: runs on this computer, private, about 750 MB to download${local.modelReady ? ' (already installed ✓)' : ''}`);
     console.log(`  3. Claude: best writing, the week's top items go to Anthropic${claude.cli ? ' (Claude Code found ✓)' : ''}`);
     const current = { digest: '1', local: '2', claude: '3' }[cfg.mode] || '1';
     let pickMode = '';
     while (!['1', '2', '3'].includes(pickMode)) pickMode = await ask(rl, 'Pick 1, 2 or 3:', current);
     const mode = { 1: 'digest', 2: 'local', 3: 'claude' }[pickMode];
     const onLog = (l) => console.log(`   ${l}`);
-    if (mode === 'local' && !(local.ollama && local.modelReady)) {
+    if (mode === 'local' && !local.modelReady) {
       try { await installLocalAI({ model: cfg.local?.model, onLog }); } catch (e) { console.log(`✖ ${e.message}\n  Using the simple summary for now. Run \`wadigest setup\` again to retry.`); }
     }
     if (mode === 'claude' && !claude.cli && !loadSecrets().anthropicApiKey && !process.env.ANTHROPIC_API_KEY) {

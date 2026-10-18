@@ -4,9 +4,9 @@ import { spawn, execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { paths } from './config.js';
-import { ollamaUp, DEFAULT_LOCAL_MODEL } from './local.js';
+import crypto from 'node:crypto';
+import { DEFAULT_LOCAL_MODEL, LLAMA_BUILDS, MODELS, BUILD_URL, platformKey, llmDir, serverBin, localReady, modelInfo } from './local.js';
 import { detectVideoTools, defaultWhisperModel } from './video.js';
-import { sleep } from './util.js';
 
 const which = (bin) => new Promise((resolve) => {
   if (!/^[\w.-]+$/.test(bin)) return resolve('');
@@ -75,42 +75,40 @@ async function brewOrExplain(onLog) {
   return brew;
 }
 
-/** Ollama + the local model. */
+async function sha256Of(file) {
+  const hash = crypto.createHash('sha256');
+  for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
+  return hash.digest('hex');
+}
+
+async function fetchChecked(url, file, sha256, onLog) {
+  if (fs.existsSync(file) && (await sha256Of(file)) === sha256) return;
+  await download(url, file, onLog);
+  if ((await sha256Of(file)) !== sha256) {
+    fs.rmSync(file, { force: true });
+    throw new Error(`${path.basename(file)} failed its checksum check. Try again.`);
+  }
+}
+
+/** The bundled local AI: llama.cpp's server program plus one small model, into ~/.wadigest/llm. */
 export async function installLocalAI({ model = DEFAULT_LOCAL_MODEL, onLog = () => {} } = {}) {
-  let ollama = await which('ollama');
-  if (!ollama && process.platform === 'win32') {
-    if (!(await which('winget'))) throw new Error('Install Ollama from https://ollama.com/download (one installer), then try again.');
-    onLog('Installing Ollama (runs AI models on this computer)…');
-    await runStreaming('winget', ['install', '-e', '--id', 'Ollama.Ollama', '--accept-package-agreements', '--accept-source-agreements', '--silent'], onLog);
-    const guess = `${process.env.LOCALAPPDATA}\\Programs\\Ollama\\ollama.exe`;
-    ollama = (await which('ollama')) || (fs.existsSync(guess) ? guess : '');
-    if (!ollama) throw new Error('Ollama installed. Open it once from the Start menu, then try again.');
+  const build = LLAMA_BUILDS[platformKey()];
+  if (!build) throw new Error(`Local AI isn't available for this computer (${platformKey()}). Choose “simply” or “with Claude”.`);
+  const info = MODELS[model] || MODELS[DEFAULT_LOCAL_MODEL];
+  const dir = llmDir();
+  fs.mkdirSync(path.join(dir, 'bin'), { recursive: true });
+  if (!serverBin()) {
+    onLog('Getting the local AI program (about 15 MB)…');
+    const archive = path.join(dir, build[0]);
+    await fetchChecked(`${BUILD_URL}/${build[0]}`, archive, build[1], onLog);
+    await runStreaming('tar', ['-xf', archive, '-C', path.join(dir, 'bin')], onLog);
+    fs.rmSync(archive, { force: true });
+    if (!serverBin()) throw new Error('The local AI program did not unpack correctly. Try again.');
+    if (process.platform !== 'win32') fs.chmodSync(serverBin(), 0o755);
   }
-  if (!ollama) {
-    if (process.platform === 'linux' && !(await which('brew'))) {
-      throw new Error('Install Ollama with: curl -fsSL https://ollama.com/install.sh | sh  (it asks for your password), then try again.');
-    }
-    await brewOrExplain(onLog);
-    onLog('Installing Ollama (runs AI models on this computer)…');
-    await runStreaming('brew', ['install', 'ollama'], onLog);
-    ollama = await which('ollama');
-  }
-  if (!(await ollamaUp()).up) {
-    onLog('Starting Ollama…');
-    if (await which('brew')) await runStreaming('brew', ['services', 'start', 'ollama'], onLog).catch(() => {});
-    if (!(await ollamaUp()).up) {
-      const child = spawn(ollama || 'ollama', ['serve'], { detached: true, stdio: 'ignore' });
-      child.unref();
-    }
-    for (let i = 0; i < 30 && !(await ollamaUp()).up; i++) await sleep(1000);
-    if (!(await ollamaUp()).up) throw new Error("Ollama didn't start. Open the Ollama app once, then try again.");
-  }
-  const { models } = await ollamaUp();
-  if (!models.some((m) => m === model || m.startsWith(model + ':') || m === `${model}:latest`)) {
-    onLog(`Downloading the ${model} model (about 2 GB, one time)…`);
-    await runStreaming(ollama || 'ollama', ['pull', model], onLog);
-  }
-  onLog(`✓ Local AI ready (${model})`);
+  onLog(`Getting the ${info.label} model (about ${info.mb} MB, one time)…`);
+  await fetchChecked(info.url, path.join(dir, info.file), info.sha256, onLog);
+  onLog(`✓ Local AI ready (${info.label})`);
 }
 
 /** ffmpeg + whisper.cpp + a multilingual model, for transcribing group videos. */
@@ -129,15 +127,9 @@ export async function installVideo({ onLog = () => {} } = {}) {
 }
 
 export async function localStatus(cfg) {
-  const o = await ollamaUp(cfg.local?.url);
-  const model = cfg.local?.model || DEFAULT_LOCAL_MODEL;
   const v = await detectVideoTools(cfg);
-  return {
-    ollama: o.up,
-    model,
-    modelReady: o.models.some((m) => m === model || m.startsWith(model + ':') || m === `${model}:latest`),
-    video: v.ready,
-  };
+  const ready = localReady(cfg);
+  return { model: modelInfo(cfg).label, modelReady: ready, video: v.ready };
 }
 
 export { paths };

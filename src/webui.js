@@ -227,7 +227,7 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
         return send(res, 200, {
           mode: c.mode, platform: process.platform,
           claude: { cli: claude.cli, key: !!(process.env.ANTHROPIC_API_KEY || loadSecrets().anthropicApiKey) },
-          local: { ready: local.ollama && local.modelReady, model: local.model, video: local.video },
+          local: { ready: local.modelReady, model: local.model, video: local.video },
         });
       }
       if (route === '/api/mode' && req.method === 'POST') {

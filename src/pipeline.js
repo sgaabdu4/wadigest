@@ -12,7 +12,7 @@ import { loadMembers } from './members.js';
 import { processVideos } from './video.js';
 import { summariseWithClaude } from './claude.js';
 import { summariseWithLocal } from './local.js';
-import { buildTranscript, linkInfoFrom } from './fullsummary.js';
+import { buildTranscript, linkInfoFrom, MIN_AI_LINES } from './fullsummary.js';
 import { log } from './log.js';
 import { sleep, randomBetween, jidUser } from './util.js';
 
@@ -79,12 +79,12 @@ export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fe
       notes.push(`Summary file not used, fell back to the no-AI digest: ${err.message}`);
       log.warn(notes[notes.length - 1]);
     }
-  } else if (ai && lines.length) {
+  } else if (ai && lines.length >= MIN_AI_LINES) {
     const who = cfg.mode === 'claude' ? 'Claude' : 'Local AI';
     onProgress(`${who} is reading ${lines.length} messages and writing the summary`);
     try {
       const input = { lines, group: cfg.group.name || 'the group', days };
-      const written = cfg.mode === 'claude' ? await summariseWithClaude(input, cfg, { onProgress }) : await summariseWithLocal(input, cfg, { fetchImpl: fetchImpl || fetch, onProgress });
+      const written = cfg.mode === 'claude' ? await summariseWithClaude(input, cfg, { onProgress }) : await summariseWithLocal(input, cfg, { onProgress });
       digest = mergeSummary(written, digest);
       digest.writtenBy = digest.source;
     } catch (err) {
