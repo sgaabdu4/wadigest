@@ -2,16 +2,16 @@
 
 Read this first. It explains what we're building, everything decided so far, what works, what's been tested, and what's left. You can copy this whole folder to another computer and carry on from here.
 
-_Last updated: Sunday 18 October 2026, around 16:10 (UK time). Third pass: several groups, any schedule, Send now, a calm one-click setup page, one-command install, public GitHub repo (sections 2.3, 4, 5)._
+_Last updated: Sunday 18 October 2026, around 17:30 (UK time). Fourth pass: real WhatsApp test on real groups, summarise everything, built-in local AI, demo video._ _Previous: around 16:10 (UK time). Third pass: several groups, any schedule, Send now, a calm one-click setup page, one-command install, public GitHub repo (sections 2.3, 4, 5)._
 
 ---
 
 ## 1. Where we are, in 30 seconds
 
-- **What it is:** a digest bot for one or more WhatsApp groups. On a schedule you choose (weekly by default) it reads each group's recent messages, ranks the top 5 links, videos and threads, and per group **posts the summary**, **pins it** and **DMs it to every member** (each switch can be turned off). It runs on one person's computer through **wacli** (an open-source tool that links to WhatsApp like WhatsApp Web).
+- **What it is:** a digest bot for one or more WhatsApp groups. On a schedule you choose (weekly by default) it reads every message each group sent in the period, summarises all of it (reactions only set the order), and per group **posts the summary**, **pins it** and **DMs it to every member** (each switch can be turned off). It runs on one person's computer through **wacli** (an open-source tool that links to WhatsApp like WhatsApp Web).
 - **Where it lives:** public repo **https://github.com/sgaabdu4/wadigest**. Install with one command (README, Install).
-- **State:** the code is written and the automated tests pass. The setup page has been tested in a real browser against a *fake* wacli. The terminal setup has been tested on Ubuntu with no screen. The pin fork compiles.
-- **Not done yet:** a real WhatsApp link, a real preview, a real first post and a real pin. These need a person at the runner's computer with their phone. Per the brief, the link code is asked for last, once everything else is known to work.
+- **State:** working end to end on the runner's Mac with a real WhatsApp account: one-command install, QR scan, three real groups posted, pinned and DM'd, background service running. 28 automated tests pass locally and in GitHub Actions.
+- **Not done yet:** a Windows PC run, the Invite QR with a second phone, demo video v2 (being made with Kokoro voice).
 - **Next step:** follow **[START-HERE.md](START-HERE.md)**. It's one page, written for someone who has never used a terminal: one command (or double-click `Start wadigest`), scan the QR code, tick groups, press Start. Section 7 has the extra checks for whoever built it.
 
 ---
@@ -113,7 +113,7 @@ _Last updated: Sunday 18 October 2026, around 16:10 (UK time). Third pass: sever
 | Terminal setup | `src/cli.js` (`cmdSetup`) | Same steps as text: link, groups (add as many as you like, with post/pin/DM questions for each), summary style, how often/day/time, start. Used when there's no screen or over SSH (`src/setup-actions.js` → `hasUI()`), or forced with `--terminal`. `--ui` forces the page. |
 | wacli wrapper | `src/wacli.js` | JSON envelope parsing, paging with `--cursor`, `send text` (retries while the store is locked), pairing with `--events` (pair code and QR events), `sync --follow`, media download, `messages pin`. **Checked against wacli 0.22's source code.** |
 | Ranking | `src/rank.js`, `src/links.js` | Links, uploaded videos, threads. `links.js` also gets page title, description and page text (oEmbed for YouTube/TikTok). |
-| Write-up | `src/summary.js` (contract + simple mode), `src/local.js` (Ollama), `src/claude.js` (`claude -p` or API key) | Any AI failure falls back to the simple summary, so a post always goes out. |
+| Write-up | `src/summary.js` (contract + simple mode), `src/fullsummary.js` (reads every message; long chats summarised in parts, then the parts summarised; only real links kept; never invents topics), `src/local.js` (built-in llama.cpp model), `src/claude.js` (Claude Haiku via `claude -p` or API key) | Any AI failure falls back to the simple summary, so a post always goes out. |
 | Formatting | `src/format.js` | WhatsApp `*bold*` / `_italic_`. Group post + personal DM (⭐ matches first, plus up to 3 extra matches). |
 | Members/commands | `src/members.js`, `src/commands.js` | Interest matching (whole words, plurals). Phone vs `@lid` IDs of the same person match. |
 | Who gets DMs | `src/pipeline.js` → `dmRecipients` | `everyone` (default; group member list from wacli minus opt-outs), `opted-in`, or `off`. |
@@ -121,7 +121,7 @@ _Last updated: Sunday 18 October 2026, around 16:10 (UK time). Third pass: sever
 | Groups | `src/config.js` (`groups`, `groupConfig`), `src/reset.js` (`setGroups`) | `groups: [{jid, name, post, pin, dm, addedAt}]`. Old single-group configs are converted on load. A new group starts fresh from its next slot. |
 | Background | `src/daemon.js`, `src/service.js` | Supervises `wacli sync --follow` (restart with backoff, cleans up a leftover sync, stops if WhatsApp unlinks). Service: **launchd** (Mac), **systemd user unit** (Linux), **Startup-folder launcher** (Windows). |
 | Videos | `src/video.js`, `src/setup-actions.js` | ffmpeg + whisper.cpp (`brew install ffmpeg whisper-cpp` + `ggml-base.bin` model), first 10 minutes, files deleted after. **Not on Windows yet.** |
-| Local AI | `src/local.js`, `src/setup-actions.js` | **Ollama** + `llama3.2:3b` (~2 GB). Installed with brew (Mac), winget (Windows), or the Ollama script (Linux). |
+| Local AI | `src/local.js`, `src/setup-actions.js` | Ships with wadigest: llama.cpp `llama-server` (pinned build b11719, per OS) plus **Qwen3 1.7B** Q4_K_M (1.3 GB), both downloaded once into `~/.wadigest/llm` and checked against pinned SHA-256s. Started only while writing a summary. No Ollama. |
 | Claude | `src/claude.js` | Uses Claude Code (`claude -p`) if installed, otherwise an API key saved in `~/.wadigest/secrets.json` (owner-only). Default API model `claude-sonnet-5-5`. |
 | Claude hand-off | `wadigest export --out week.json --prompt` → Claude writes `summary.json` → `wadigest run --summary summary.json` | Or `config set mode summary-file` + `summary.path`. Format in README. |
 | Pinning (fork) | `wacli-fork/messages_pin.go`, `wacli-fork/build.sh`, `.github/workflows/wacli-fork.yml` (builds Mac arm64/Intel, Linux amd64/arm64 and Windows, and publishes the release on pushes that touch `wacli-fork/`) | Adds `wacli messages pin --chat --id [--duration 7d] [--unpin]`, which sends WhatsApp's `PinInChatMessage` (24h/7d/30d). wadigest pauses sync, pins, and resumes. |
@@ -153,14 +153,25 @@ No runtime dependencies: just Node 20+.
 - **Background loop:** it answered a `!digest join`, posted on schedule, sent the DM, and skipped the second post.
 - **Installer (Mac/Linux script):** ran in a clean home folder with a fake wacli and set up the command and PATH.
 
-**Not verified (please do these first):**
-1. **A real wacli + a real WhatsApp link.** No real wacli is installed on this Mac yet, and nothing has been linked. Check the items in section 7.
-2. **A real pin.** The fork compiles, but it has never pinned a real message. It has also not been built as a Mac binary: the Mac has no Go yet, so the installer will `brew install go` and build it the first time. If that fails, read `~/.wadigest/logs/wacli-build.log`. Everything else still works without it; pin by hand.
-3. **Windows:** `install.ps1`, `Start wadigest.cmd` and the Windows background service were written carefully but **never run**. The Windows installer doesn't build the pin fork.
-4. **Local AI install** (Ollama + model download) and **video install** (brew ffmpeg/whisper-cpp + model): written but not run.
-5. **The real installer run:** only tested with `--no-setup` and a fake wacli. The Homebrew wacli install, the GitHub-release fallback and the Go install through Homebrew have not been run.
-6. **Linux installer:** not run (the script is shared with Mac, so most of it is covered).
-7. **The Getting things ready screen when the install fails** (for example with no internet): written to show an error and a Try again button, but not tried.
+**Verified on the runner's Mac with real WhatsApp (fourth pass, 18 Oct, 16:20 to 17:30):**
+- **One-command install** (`curl … get.sh | bash`) from the public repo: Node found, page opened in about 2 s, "Getting ready" downloaded wacli with pinning from this repo's release (checksum-checked), no Homebrew or Go needed.
+- **QR link** with the runner's phone: about 1,000 messages synced, then the page moved on by itself. (The progress count and the "you're linked" message were added after this, because it looked stuck.)
+- **Real sends** (the runner approved posts, pins and DMs):
+  - Summarizer: posted, pinned, 2 DMs.
+  - SAMI family: posted, pinned, 10 DMs.
+  - Family ❤️: posted, pinned, 5 DMs, each DM then deleted for the runner only.
+  - Each group's summary went only to that group's members.
+- **Summary styles on real chats:** Claude Haiku (about 35 s, short plain English, very accurate); built-in local AI Qwen3 1.7B (15 to 25 s, accurate topics, some repetition); LFM2.5 1.2B was tested and rejected (vague, invented topics).
+- **History:** WhatsApp gives a newly linked device only a small slice of past messages. `wacli history backfill` fetched older messages (Everything Electric 150, Family ❤️ 148) but could not fill July to mid-October for Family ❤️. Everything after linking is captured live.
+- **Bugs found and fixed during the real run:** sends failed while the service held the store lock (now the service pauses for the whole send, page and CLI); `launchctl kickstart` could hang (20 s limit, bootstrap retry); the page paused the service and so stopped member replies (now only during first setup or relinking); "All quiet" when a quiet chat had a short real message (now lists every message).
+- **Ubuntu 24.04 container, no screen:** install, terminal setup with several groups, preview, run, config commands all pass (systemd itself not available in the container).
+
+**Not verified:**
+1. **Windows:** `get.ps1`, `install.ps1`, `Start wadigest.cmd`, the Startup-folder service and the Windows llama.cpp build were written carefully but never run on a real Windows PC.
+2. **Invite QR with a second phone**, and a member's `!digest join` reply arriving within about 2 minutes.
+3. **A real scheduled Sunday run** (the schedule logic is tested; the first real slot is Sunday 25 October 09:00).
+4. **Linux with real systemd** (the "keep running after logout" step).
+5. **Video transcription** (ffmpeg + whisper.cpp): written but not run.
 
 ---
 
@@ -172,12 +183,12 @@ No runtime dependencies: just Node 20+.
 | Per group | post **on**, pin **on**, message members **on** | Page, Change settings (tap the dots), or `config group "Name" post\|pin\|dm on\|off` |
 | Schedule | **every 7 days, Sunday 09:00**, computer's timezone | Page sentence, or `config set schedule.everyDays/day/time/timezone` |
 | Window | the days since the previous slot | `config set schedule.readDays N` (0 = same as how often) |
-| Items | **top 5** | `config set topN 5` |
+| Items | **everything** (simple style lists up to 40; AI styles cover every topic) | `config set topN 0` (0 = everything) |
 | Write-up | **Simple summary (no AI)** | Page sentence ("written simply"), or `config set mode digest\|local\|claude\|summary-file` |
 | DMs | **everyone in the group** (minus `!digest stop`) | Per-group switch; `config set dms.audience everyone\|opted-in` decides who counts |
 | Pin | **auto** (when the fork is installed), **7 days** | `config set pin.enabled off`, `config set pin.duration 30d` |
 | Videos | auto when installed; asked during setup | `config set video.enabled auto\|on\|off` |
-| Local model | `llama3.2:3b` via Ollama | `config set local.model …` |
+| Local model | `qwen3-1.7b` (built in) | `config set local.model lfm2.5-1.2b` for a smaller, vaguer model |
 | Claude | Claude Code login if found, else API key | `wadigest config set-key` |
 
 **Risks we accepted:**
@@ -188,22 +199,11 @@ No runtime dependencies: just Node 20+.
 
 ## 7. Next steps (in order)
 
-1. **On the computer that will run it** (the runner's Mac), with **the WhatsApp phone in hand**, follow [START-HERE.md](START-HERE.md). In short:
-   - Double-click **`Start wadigest.command`**. If macOS blocks it, right-click → Open.
-   - The page opens within seconds (only Node.js is set up first). Its first screen, **Getting things ready**, installs wacli and builds pinning with a checklist, then moves on by itself.
-2. **Step 1 · Connect WhatsApp:** type the number and an 8-character code appears. On the phone: **WhatsApp → Settings → Linked devices → Link a device → Link with phone number instead** → type the code. Or use the QR tab and scan.
-3. **Step 2 · Group:** type **Developer Bros**. Confirm it found the right group.
-4. **Step 3 · Summary style:** start with **Simple summary**. Try Local AI or Claude later.
-5. **Step 4 · Schedule + DMs:** Sunday 09:00, **Everyone in the group** → **Start wadigest**.
-6. **Check against real wacli** before the first real Sunday:
-   - Control panel → **Preview**. It should show a real number of messages read, real names, and correct 👍 counts.
-     - **0 messages?** Run `wacli --store ~/.wadigest/wacli-store --json --read-only messages list --chat <GROUP_ID> --limit 5` and compare the field names with `src/wacli.js`.
-     - **Numbers instead of names?** Some groups use `@lid` sender IDs. Names come from `SenderName`.
-   - Run `wadigest doctor`. Everything should be ✅. Pinning shows as available if the fork built.
-   - **First real send:** test it in a **small test group**. Panel → Group → Change → a test group, then run `wadigest run` in Terminal (it asks before sending). Check the post, the **pin**, and a DM. Then switch back to Developer Bros. Switching resets that group's data, so do the test **before** members set interests.
-   - Ask a teammate to send `!digest interests agents` in the group; they should get a DM reply within about a minute.
-7. **Tell the group** (the control panel has a copy button): *"Every Sunday you'll get the week's top 5 here and by DM. Send `!digest interests agents, n8n` to get your picks first, `!digest stop` for no DMs."*
-8. **Then:** `git commit` anything changed during the real run. Optionally push to GitHub so `.github/workflows/wacli-fork.yml` builds pin-capable wacli for every OS. Test on Windows if anyone needs it.
+1. **Demo video v2** with a Kokoro British voice (in progress; files in `demo/`, not committed).
+2. **Before Sunday 25 October 09:00:** leave the runner's Mac on or asleep (it catches up within 3 days). Open the page (`wadigest`) and press **Preview** to check each group.
+3. **Invite test:** on the page, press **Invite**; someone scans it and sends `!digest join`. They should get a reply within about 2 minutes.
+4. **Windows:** run the one PowerShell line on a Windows PC and go through setup.
+5. **Tell the groups:** *"You'll get a summary of this group here and by private message. Send `!digest interests agents, n8n` to get your picks first, or `!digest stop` for no private messages."*
 
 ---
 
@@ -219,16 +219,16 @@ No runtime dependencies: just Node 20+.
 ## 9. Handy commands
 
 ```bash
-wadigest                 # setup page / control panel (terminal steps if no screen)
-wadigest preview         # this week's digest, sends nothing
-wadigest run             # send now (asks first)
-wadigest status          # what's set up, next run, last post
+wadigest                 # the page (or the setup questions on a server)
+wadigest preview         # build the summaries now, sends nothing
+wadigest run             # send now (asks first; --group "Name" for one group)
+wadigest status          # groups, schedule, next send, last send
 wadigest doctor          # health check
-wadigest groups [name]   # list groups + IDs
-wadigest export --out week.json --prompt   # hand the week to Claude
-wadigest run --summary summary.json        # post what Claude wrote
+wadigest groups [name]   # list your WhatsApp groups
+wadigest config add-group "Name" / remove-group "Name" / group "Name" pin off
+wadigest config set schedule.everyDays 3
+wadigest config set mode digest|local|claude
 npm test                 # tests
-bash scripts/package.sh  # zip for other people
 ```
 
 **Logs:** `~/.wadigest/logs/` (`wadigest.log`, `wacli-sync.log`, `link.log`, `wacli-build.log`).
