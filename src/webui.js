@@ -231,7 +231,7 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
         for (const p of Array.isArray(body.groups) ? body.groups : []) {
           const g = known.find((x) => x.jid === p.jid);
           if (!g) return send(res, 400, { error: `"${p.name || 'A group'}" isn't on this WhatsApp any more. Search again.` });
-          picked.push({ jid: g.jid, name: g.name, post: p.post, pin: p.pin, dm: p.dm });
+          picked.push({ jid: g.jid, name: g.name, post: p.post, pin: p.pin, dm: p.dm, anon: p.anon });
         }
         if (!picked.length) return send(res, 400, { error: 'Pick at least one group.' });
         setGroups(loadConfig(), picked);

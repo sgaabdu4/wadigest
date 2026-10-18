@@ -258,3 +258,27 @@ test('a group\'s summary only goes to people in that group', async () => {
   assert.ok(!deleted.some((x) => x.chat.endsWith('@g.us')), 'group posts are kept');
   assert.ok(devDms.every((x) => x.to !== '447700000032@s.whatsapp.net'), 'no Family member gets the dev summary');
 });
+
+test('setup page: the Anonymise members tick is saved with the group', async () => {
+  sandbox();
+  process.env.WADIGEST_FAKE_SERVICE = '1';
+  setupCfg({ setupDone: true });
+  const { runSetupUI } = await import('../src/webui.js');
+  const log = console.log;
+  let url = '';
+  console.log = (s) => { url ||= (String(s).match(/http:\/\/127\.0\.0\.1:\d+\/s\/[a-f0-9]+\//) || [''])[0]; };
+  const done = runSetupUI({ open: false, port: 0 });
+  try {
+    for (let i = 0; i < 100 && !url; i++) await new Promise((r) => setTimeout(r, 20));
+    const post = (p, body) => fetch(url + 'api/' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
+    assert.deepEqual(await post('groups', { groups: [{ jid: GROUP, name: 'Developer Bros', post: true, pin: true, dm: true, anon: true }] }), { ok: true });
+    assert.equal(loadConfig().groups[0].anon, true);
+    await post('groups', { groups: [{ jid: GROUP, name: 'Developer Bros', post: true, pin: true, dm: true, anon: false }] });
+    assert.equal(loadConfig().groups[0].anon, false);
+  } finally {
+    await fetch(url + 'api/close', { method: 'POST' }).catch(() => {});
+    await done;
+    console.log = log;
+    delete process.env.WADIGEST_FAKE_SERVICE;
+  }
+});
