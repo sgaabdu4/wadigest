@@ -19,6 +19,7 @@ import { renderGroupPost } from './format.js';
 import { normalizePhone } from './util.js';
 import { loadSecrets, saveSecrets } from './config.js';
 import { detectClaude, installLocalAI, installVideo, localStatus, runStreaming } from './setup-actions.js';
+import { LLAMA_BUILDS, platformKey, localReady } from './local.js';
 
 const HTML_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'ui', 'index.html');
 const APP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -58,6 +59,20 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
   const link = { status: 'idle', kind: '', code: '', qr: '', error: '', messages: 0, child: null };
   const job = { running: false, log: [], error: '' };
   const run = { running: false, done: 0, total: 0, log: [], error: '' };
+  // The local AI is a big download, so first setup starts it while the user links WhatsApp and picks groups.
+  let localDl = null;
+  let localLog = () => {};
+  const prefetchLocal = () => {
+    if (!localDl) {
+      localDl = installLocalAI({ model: loadConfig().local?.model, onLog: (l) => localLog(l) }).catch((e) => { localDl = null; throw e; });
+      localDl.catch(() => {});
+    }
+    return localDl;
+  };
+  const maybePrefetchLocal = () => {
+    const c = loadConfig();
+    if (!c.setupDone && installerDone() && LLAMA_BUILDS[platformKey()] && !localReady(c)) prefetchLocal();
+  };
   let groupsCache = null;
   let refreshed = false;
 
@@ -249,7 +264,10 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
         const onLog = (l) => { job.log.push(l); if (job.log.length > 400) job.log.splice(0, 100); };
         (async () => {
           try {
-            if (body.local) await installLocalAI({ model: loadConfig().local?.model, onLog });
+            if (body.local) {
+              localLog = onLog;
+              try { await prefetchLocal(); } finally { localLog = () => {}; }
+            }
             if (body.video) await installVideo({ onLog });
           } catch (e) { job.error = e.message; onLog(`✖ ${e.message}`); }
           job.running = false;
@@ -265,6 +283,7 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
             await runInstaller(onLog);
             if (!installerDone()) throw new Error('The install stopped before it finished.');
             wacli = new Wacli(loadConfig());
+            maybePrefetchLocal();
           } catch (e) { job.error = e.message; onLog(`✖ ${e.message}`); }
           job.running = false;
         })();
@@ -345,6 +364,7 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
   const url = `http://127.0.0.1:${server.address().port}${base}/`;
   console.log(`\n  wadigest is open in your browser.\n  If it didn't open, paste this into your browser:\n\n    ${url}\n\n  Keep this window open until you press "Start" on the page. (Ctrl+C to quit.)\n`);
   if (open) openBrowser(url);
+  maybePrefetchLocal();
 
   const onSig = () => closeResolve();
   process.on('SIGINT', onSig);

@@ -424,6 +424,8 @@ async function viewSettings() {
         await new Promise((resolve, reject) => {
           const t = setInterval(async () => {
             const j = await api('/job').catch(() => null);
+            const pct = /(\d+)%$/.exec(j?.log?.[j.log.length - 1] || '');
+            if (pct) busy(btn, `Installing local AI, ${pct[1]}%`);
             if (j && !j.running) { clearInterval(t); j.error ? reject(new Error(j.error)) : resolve(); }
           }, 1000);
         });
