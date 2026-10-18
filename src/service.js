@@ -99,7 +99,7 @@ const unitFile = () => path.join(os.homedir(), '.config', 'systemd', 'user', 'wa
 
 function sh(cmd, args, { ignore = false } = {}) {
   try {
-    return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 20_000 });
   } catch (err) {
     if (ignore) return '';
     throw new Error(`${cmd} ${args.join(' ')}: ${String(err.stderr || err.message).trim()}`);

@@ -149,6 +149,15 @@ async function go(v) {
 }
 
 const note = (text, kind = '') => `<p class="note ${kind}">${kind ? '' : '<span class="spin"></span>'}${esc(text)}</p>`;
+let tickTimer = null;
+const since = (t0) => { const s = Math.round((Date.now() - t0) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+function waiting(el, text, hint = '') {
+  clearInterval(tickTimer);
+  const t0 = Date.now();
+  el.innerHTML = `<p class="note"><span class="spin"></span><span class="wtext">${esc(text)}</span>&nbsp;<span class="muted wclock">0:00</span></p>${hint ? `<p class="hint center">${esc(hint)}</p>` : ''}`;
+  tickTimer = setInterval(() => { const c = el.querySelector('.wclock'); if (c) c.textContent = since(t0); else clearInterval(tickTimer); }, 1000);
+  return (t) => { const w = el.querySelector('.wtext'); if (w) w.textContent = t; };
+}
 const busy = (btn, text = '') => { btn.disabled = true; btn.innerHTML = `<span class="spin"></span>${esc(text)}`; };
 
 // ---------- Getting ready (first time only) ----------
@@ -280,8 +289,7 @@ function linkProgress() {
     return;
   }
   if (L.status === 'syncing') {
-    $('#lstatus').innerHTML = note(`Connected. Loading your chats${L.messages ? ` (${L.messages.toLocaleString()})` : ''}`);
-    $('#lstatus .note').classList.add('good');
+    $('#lstatus').innerHTML = `<p class="note good"><span class="spin"></span>Connected. Loading your chats${L.messages ? `: ${L.messages.toLocaleString()} messages so far` : ''}</p><p class="hint center">Your phone is linked. WhatsApp is sending your recent messages, which can take a minute. This page moves on by itself.</p>`;
     if ($('.qr')) $('.qr').classList.add('hidden');
     if ($('#codewrap')) $('#codewrap').innerHTML = '';
     return;
@@ -463,9 +471,10 @@ function viewHome() {
   });
   if ($('#startsvc')) $('#startsvc').onclick = async () => { busy($('#startsvc')); try { await api('/start', {}); await refresh(); viewHome(); } catch (e) { $('#out').innerHTML = note(e.message, 'bad'); } };
   $('#prev').onclick = async () => {
-    $('#out').innerHTML = note('Reading messages');
+    waiting($('#out'), S.mode === 'digest' ? 'Reading messages' : 'Reading every message and writing the summary', S.mode === 'digest' ? '' : 'This usually takes a minute or two. Nothing is sent.');
     try {
       const r = await api('/preview');
+      clearInterval(tickTimer);
       $('#out').innerHTML = r.previews.map((p) => `<p class="pvname">${esc(p.name)}</p><div class="phone"><div class="bubble">${waFormat(p.text)}</div></div>`).join('');
     } catch (e) { $('#out').innerHTML = note(e.message, 'bad'); }
   };
@@ -479,12 +488,13 @@ function viewHome() {
     if (!confirm(`Send a summary now to ${S.groups.map((g) => g.name).join(' and ')}?`)) return;
     try { await api('/run', {}); } catch (e) { $('#out').innerHTML = note(e.message, 'bad'); return; }
     clearInterval(pollTimer);
-    $('#out').innerHTML = note('Sending');
+    const say = waiting($('#out'), 'Starting', 'This takes a few minutes. Private messages go out slowly on purpose, so WhatsApp stays happy.');
     pollTimer = setInterval(async () => {
       await refresh().catch(() => {});
       const r = S.run;
-      if (r.running) { $('#out').innerHTML = note(r.log[r.log.length - 1] || 'Sending'); return; }
+      if (r.running) { say(r.log[r.log.length - 1] || 'Sending'); return; }
       clearInterval(pollTimer);
+      clearInterval(tickTimer);
       const lines = r.log.filter((l) => /: done|failed|rror/.test(l));
       $('#out').innerHTML = `<p class="note ${r.error ? 'bad' : 'good'}" style="display:block">${lines.map(esc).join('<br>') || 'Sent'}</p>`;
     }, 1500);

@@ -85,7 +85,7 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
         else if (ev.event === 'qr_code') { link.qr = String(ev.data?.code || ''); link.status = 'waiting'; }
         else if (ev.event === 'connected') link.status = 'syncing';
         else if (ev.event === 'progress' && link.status === 'syncing') {
-          const n = Number(ev.data?.messages ?? ev.data?.count ?? ev.data?.stored ?? 0);
+          const n = Number(ev.data?.messages_synced ?? ev.data?.messages ?? ev.data?.count ?? ev.data?.stored ?? 0);
           if (n) link.messages = n;
         } else if (ev.event === 'error') link.error = String(ev.data?.message || ev.data?.error || 'WhatsApp reported an error');
       },
@@ -295,19 +295,20 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
         if (run.running) return send(res, 200, { ok: true });
         Object.assign(run, { running: true, done: 0, total: c.groups.length, log: [], error: '' });
         (async () => {
-          const pauseSync = async (fn) => {
-            const was = stopServiceIfRunning();
-            try { return await fn(); } finally { if (was) installService(loadConfig()); }
-          };
+          // Sending needs WhatsApp's connection, which the background service holds: pause it for the run.
+          const was = stopServiceIfRunning();
           const state = loadState();
           for (const g of c.groups) {
             try {
-              run.log.push(`${g.name}: reading messages…`);
-              const r = await runGroupNow({ cfg: c, group: g, state, wacli: new Wacli(c), pauseSync, onDm: (m, ok) => run.log.push(`${g.name}: DM ${ok ? 'sent' : 'failed'} to ${m.name || m.jid.split('@')[0]}`) });
+              run.log.push(`${g.name}: reading messages`);
+              const onProgress = (t) => run.log.push(`${g.name}: ${t}`);
+              let n = 0;
+              const r = await runGroupNow({ cfg: c, group: g, state, wacli: new Wacli(c), onProgress, onDm: (m, ok) => run.log.push(`${g.name}: ${ok ? 'sent' : 'could not send'} private message ${++n}`) });
               run.log.push(`${g.name}: done${r.group ? ', posted' : ''}${r.pinned ? ' and pinned' : ''}${g.dm !== false ? `, ${r.dms.filter((d) => d.ok).length} DMs sent` : ''}`);
             } catch (e) { run.error = `${g.name}: ${e.message}`; run.log.push(run.error); }
             run.done++;
           }
+          if (was || finished) { try { installService(loadConfig()); } catch (e) { run.log.push(`Couldn't restart the background service: ${e.message}`); } }
           run.running = false;
         })();
         return send(res, 200, { ok: true });

@@ -18,7 +18,8 @@ const SYNC_WARMUP_MS = Number(process.env.WADIGEST_WARMUP_MS) || 90_000; // let 
 const VIDEO_EVERY_MS = 3 * 3600e3;
 
 /** Process new !digest commands once. Returns how many were handled. */
-export async function processCommands({ cfg, state, wacli, now = new Date() }) {
+export async function processCommands({ cfg, state, wacli, now = new Date(), pauseSync = (fn) => fn() }) {
+  const outbox = [];
   const groups = (cfg.groups || []).filter((g) => g.jid);
   if (!groups.length) return 0;
   const floor = Math.max(Date.parse(cfg.installedAt) || 0, now.getTime() - 24 * 3600e3);
@@ -58,7 +59,7 @@ export async function processCommands({ cfg, state, wacli, now = new Date() }) {
     if (isDm && cmd.verb === 'join') {
       const known = (await Promise.all(groups.map(usersOf))).some((s) => s.size);
       if (known && !memberOf.length) {
-        await safeSend(wacli, replyTo, `This digest is for members of ${groups.map((g) => g.name || 'the group').join(', ')}. Send *!digest join …* inside the group to opt in.`);
+        outbox.push([replyTo, `This digest is for members of ${groups.map((g) => g.name || 'the group').join(', ')}. Send *!digest join …* inside the group to opt in.`]);
         continue;
       }
     }
@@ -68,8 +69,9 @@ export async function processCommands({ cfg, state, wacli, now = new Date() }) {
     if (who && memberOf.length) { addGroups(who, memberOf); membersChanged = true; }
     if (res.changed) membersChanged = true;
     log.info(`!digest ${cmd.verb} from ${m.SenderName || senderJid}${inGroup ? ' (group)' : ' (DM)'}`);
-    await safeSend(wacli, replyTo, res.reply);
+    outbox.push([replyTo, res.reply]);
   }
+  if (outbox.length) await pauseSync(async () => { for (const [to, text] of outbox) await safeSend(wacli, to, text); });
   if (membersChanged) saveMembers(members);
   state.handledCommandIds = [...handled];
   state.commandsCheckedAt = new Date(now.getTime() - 120_000).toISOString(); // small overlap; ids dedupe
@@ -104,7 +106,9 @@ async function maybeRunGroup({ cfg, state, wacli, now, pauseSync }) {
     const window = windowFor(d.slot, cfg.schedule.timezone, readDays(cfg.schedule));
     const { digest, messages, notes } = await prepareDigest({ cfg, state, wacli, window });
     notes.forEach((n) => log.warn(n));
-    const res = await deliver({ cfg, state, wacli, digest, key: d.key, pauseSync, noGroup: !cfg.post });
+    const res = pauseSync
+      ? await pauseSync(() => deliver({ cfg, state, wacli, digest, key: d.key, noGroup: !cfg.post }))
+      : await deliver({ cfg, state, wacli, digest, key: d.key, noGroup: !cfg.post });
     log.info(`Done for ${d.key}: ${messages} messages read, ${digest.items.length} items, ${res.dms.filter((x) => x.ok).length} DMs sent`);
     delete state.attempts[d.key].lastError;
     saveState(state);
@@ -219,7 +223,7 @@ export async function runDaemon({ once = false } = {}) {
     try {
       cfg = loadConfig();
       const state = loadState();
-      await processCommands({ cfg, state, wacli });
+      await processCommands({ cfg, state, wacli, pauseSync });
       saveState(state);
       if (cfg.groups.length && now - lastVideoRun > VIDEO_EVERY_MS) {
         lastVideoRun = now;

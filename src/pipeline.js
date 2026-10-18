@@ -81,6 +81,7 @@ export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fe
     }
   } else if (ai && lines.length) {
     const who = cfg.mode === 'claude' ? 'Claude' : 'Local AI';
+    onProgress(`${who} is reading ${lines.length} messages and writing the summary`);
     try {
       const input = { lines, group: cfg.group.name || 'the group', days };
       const written = cfg.mode === 'claude' ? await summariseWithClaude(input, cfg, { onProgress }) : await summariseWithLocal(input, cfg, { fetchImpl: fetchImpl || fetch, onProgress });
@@ -204,10 +205,11 @@ export async function deliver({ cfg, state, wacli, digest, key, noGroup = false,
 }
 
 /** Build and send one group's digest right now (the "Run now" button / `wadigest run`). */
-export async function runGroupNow({ cfg, group, state, wacli, pauseSync, onDm }) {
+export async function runGroupNow({ cfg, group, state, wacli, pauseSync, onDm, onProgress = () => {} }) {
   const gc = groupConfig(cfg, group);
   const window = rollingWindow(new Date(), readDays(cfg.schedule));
-  const { digest, messages, notes } = await prepareDigest({ cfg: gc, state, wacli, window });
+  const { digest, messages, notes } = await prepareDigest({ cfg: gc, state, wacli, window, onProgress });
+  onProgress(`sending (${messages} messages read)`);
   saveState(state);
   const key = gc.post ? `manual|${group.jid}|${Date.now()}` : null;
   const res = await deliver({ cfg: gc, state, wacli, digest, key, noGroup: !gc.post, pauseSync, onDm });
