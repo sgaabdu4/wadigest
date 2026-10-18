@@ -57,7 +57,7 @@
   .note { display: flex; gap: 10px; align-items: center; justify-content: center; color: var(--ink-2); font-size: 15px; margin-top: 18px; text-align: center; }
   .note.good { color: var(--sage); }
   .note.bad { color: var(--danger); }
-  .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .9s linear infinite; flex: none; }
+  .spin { display: inline-block; vertical-align: -3px; width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .9s linear infinite; flex: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .err { color: var(--danger); font-size: 15px; margin-top: 14px; text-align: center; }
 
@@ -117,6 +117,8 @@
   .gt.on { background: var(--sage-soft); border-color: #c9d6cc; color: var(--sage-2); }
   .gt.on::before { content: "✓ "; }
   .gbody .bubble { max-height: 460px; overflow: auto; }
+  .pvload { display: flex; gap: 12px; align-items: flex-start; color: var(--ink-2); }
+  .pvload .spin { color: var(--sage); margin-top: 3px; }
   details.more { margin-top: 26px; color: var(--ink-3); font-size: 13px; text-align: center; }
   details.more summary { cursor: pointer; }
   .log { font-family: var(--mono); font-size: 12px; text-align: left; background: var(--card); border-radius: 12px; padding: 10px 12px; max-height: 160px; overflow: auto; white-space: pre-wrap; margin-top: 10px; }
@@ -374,7 +376,7 @@ async function viewGroups() {
 
 // ---------- 3. How it works ----------
 const OFTEN = [[1, 'every day'], [2, 'every 2 days'], [3, 'every 3 days'], [7, 'every week'], [14, 'every 2 weeks'], [30, 'every month']];
-const MODES = [['digest', 'simply'], ['local', 'with local AI'], ['claude', 'with Claude']];
+const MODES = [['digest', 'simply'], ['local', 'with local AI'], ['claude', 'with Claude'], ['chatgpt', 'with ChatGPT']];
 
 async function viewSettings() {
   setSteps(3);
@@ -389,7 +391,7 @@ async function viewSettings() {
   $('#app').innerHTML = `
     <h2>How it works</h2>
     <p class="lead">Tap the green words to change them.</p>
-    <p class="sentence">Send a summary <select id="often" aria-label="How often">${opt(often, sc.everyDays)}</select><span id="dayw"> <span id="onw">on</span> <select id="day" aria-label="Day">${opt(DAYS.map((d) => [d, cap(d)]), sc.day)}</select></span> at <input id="time" type="time" value="${esc(sc.time)}" aria-label="Time">, written <select id="mode" aria-label="Written by">${opt(MODES, M.mode || S.mode)}</select>.</p>
+    <p class="sentence">Send a summary <select id="often" aria-label="How often">${opt(often, sc.everyDays)}</select><span id="dayw"> <span id="onw">on</span> <select id="day" aria-label="Day">${opt(DAYS.map((d) => [d, cap(d)]), sc.day)}</select></span> at <input id="time" type="time" value="${esc(sc.time)}" aria-label="Time">, written <select id="mode" aria-label="Written by">${opt(MODES.filter(([k]) => k === (M.mode || S.mode) || (k === 'claude' ? M.claude?.cli || M.claude?.key : k === 'chatgpt' ? M.chatgpt?.cli : true)), M.mode || S.mode)}</select>.</p>
     <div id="modex"></div>
     ${[...picked.values()].map((g) => `
       <p class="gname">${esc(g.name)}</p>
@@ -534,11 +536,13 @@ function viewHome() {
   const refreshGo = () => {
     const on = [...pick.values()].filter((c) => c.on);
     const missing = on.filter((c) => shown.get(c.jid) !== want(c));
+    const loading = on.some((c) => asked.get(c.jid) === want(c) && shown.get(c.jid) !== want(c));
     const empty = on.some((c) => !c.post && !c.dm);
     $('#sendgo').disabled = !on.length || empty || missing.length > 0 || !!S.run?.running;
     $('#sendgo').textContent = !on.length ? 'Tick a group to send it'
       : empty ? 'Each group needs Post or Message'
-        : missing.length === 1 ? `Preview ${missing[0].name} to send`
+        : loading ? 'Generating the preview…'
+          : missing.length === 1 ? `Preview ${missing[0].name} to send`
           : missing.length ? `Preview the ${missing.length} ticked groups to send`
             : `Send to ${on.length} group${on.length > 1 ? 's' : ''}`;
   };
@@ -547,8 +551,17 @@ function viewHome() {
     if (asked.get(c.jid) === k) return;
     asked.set(c.jid, k);
     const el = card(c.jid).querySelector('.bubble');
-    el.innerHTML = `<span class="spin"></span>Generating the preview…${S.mode === 'digest' ? '' : ' The AI reads every message, so this usually takes a minute or two. Nothing is sent.'}`;
-    chain = chain.then(() => (view === 'home' && want(c) === k ? api(`/preview?group=${encodeURIComponent(c.jid)}&anon=${c.anon ? 1 : 0}&dm=${c.dm ? 1 : 0}`) : null)).then((r) => {
+    el.innerHTML = `<div class="pvload"><span class="spin"></span><span><b>Generating the preview…</b>${S.mode === 'digest' ? '' : '<br>The AI reads every message, so this usually takes a minute or two. Nothing is sent.'}</span></div>`;
+    refreshGo();
+    const poll = async () => {
+      for (;;) {
+        if (view !== 'home' || want(c) !== k) return null;
+        const r = await api(`/preview?group=${encodeURIComponent(c.jid)}&anon=${c.anon ? 1 : 0}&dm=${c.dm ? 1 : 0}`);
+        if (!r.pending) return r;
+        await new Promise((ok) => setTimeout(ok, 2000));
+      }
+    };
+    chain = chain.then(poll).then((r) => {
       if (!r || view !== 'home' || want(c) !== k) return;
       el.innerHTML = waFormat(r.previews[0].text);
       shown.set(c.jid, k);

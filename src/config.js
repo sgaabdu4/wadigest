@@ -42,11 +42,13 @@ export function defaultConfig() {
     schedule: { day: 'sunday', time: '09:00', timezone: defaultTimezone(), everyDays: 7, readDays: 0, start: '' },
     topN: 0, // simple summary: 0 = everything shared (up to 40); AI summaries always cover the whole chat
     // digest = simple summary, no AI. local = a small model bundled with wadigest (llama.cpp). claude = Claude (claude -p
-    // or API key). summary-file = use a summary another tool drops at summary.path.
+    // or API key). chatgpt = ChatGPT through Codex (codex exec, the user's own login). summary-file = use a summary
+    // another tool drops at summary.path.
     mode: 'digest',
     local: { model: 'qwen3-1.7b' }, // qwen3-1.7b (1.3 GB, default) or lfm2.5-1.2b (731 MB, faster, vaguer)
     summary: { path: '', waitMinutes: 60 },
     claude: { command: 'claude', model: '' },
+    chatgpt: { command: 'codex', model: '' },
     // audience: everyone = every group member gets the digest by DM (minus anyone who sent !digest stop),
     // opted-in = only people who sent !digest join, off = group post only.
     // deleteForMe: remove each sent DM from the runner's own chats ("delete for me"), so they don't clog the feed.
@@ -201,8 +203,8 @@ export function setConfigValue(cfg, key, rawValue) {
   if (key === 'schedule.timezone') {
     try { new Intl.DateTimeFormat('en-GB', { timeZone: value }); } catch { throw new Error(`Unknown timezone "${value}"`); }
   }
-  if (key === 'mode' && !['digest', 'local', 'claude', 'summary-file'].includes(value)) {
-    throw new Error('mode must be digest, local, claude or summary-file');
+  if (key === 'mode' && !['digest', 'local', 'claude', 'chatgpt', 'summary-file'].includes(value)) {
+    throw new Error('mode must be digest, local, claude, chatgpt or summary-file');
   }
   if (key === 'dms.audience' && !['everyone', 'opted-in', 'off'].includes(value)) throw new Error('dms.audience must be everyone, opted-in or off');
   if (key === 'topN' && (value < 0 || value > 40)) throw new Error('topN must be 0 (everything) to 40');

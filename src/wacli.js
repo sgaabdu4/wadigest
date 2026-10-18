@@ -158,7 +158,7 @@ export class Wacli {
     }
     // Show the name each person set in WhatsApp, never the name saved in this phone's contacts.
     const own = await this.ownNames();
-    return own ? rows.map((m) => (m.FromMe ? m : { ...m, SenderName: own.get(String(m.SenderJID || '').replace(/:\d+@/, '@')) || '' })) : rows;
+    return own ? rows.map((m) => ({ ...m, SenderName: (m.FromMe ? own.get('me') : own.get(String(m.SenderJID || '').replace(/:\d+@/, '@'))) || '' })) : rows;
   }
 
   /** jid -> the name the person chose in WhatsApp (their "push name"), from WhatsApp's own store. Null if unreadable. */
@@ -173,6 +173,8 @@ export class Wacli {
         try {
           names = new Map();
           for (const r of db.prepare("SELECT their_jid AS jid, push_name AS name FROM whatsmeow_contacts WHERE push_name <> ''").all()) names.set(r.jid, r.name);
+          const me = db.prepare("SELECT push_name AS name FROM whatsmeow_device WHERE push_name <> '' LIMIT 1").get();
+          if (me) names.set('me', me.name);
           for (const r of db.prepare('SELECT lid, pn FROM whatsmeow_lid_map').all()) {
             const n = names.get(`${r.pn}@s.whatsapp.net`);
             if (n) names.set(`${r.lid}@lid`, n);

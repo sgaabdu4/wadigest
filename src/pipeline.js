@@ -12,6 +12,7 @@ import { renderGroupPost, renderPersonal } from './format.js';
 import { loadMembers } from './members.js';
 import { processVideos } from './video.js';
 import { summariseWithClaude } from './claude.js';
+import { summariseWithChatGPT } from './chatgpt.js';
 import { summariseWithLocal } from './local.js';
 import { buildTranscript, linkInfoFrom, MIN_AI_LINES } from './fullsummary.js';
 import { log } from './log.js';
@@ -54,7 +55,7 @@ export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fe
   }
 
   const topN = cfg.topN || 0;
-  const ai = cfg.mode === 'local' || cfg.mode === 'claude';
+  const ai = ['local', 'claude', 'chatgpt'].includes(cfg.mode);
   if (cfg.linkTitles !== false) {
     const needInfo = ranked.items.slice(0, ai ? 40 : (topN || 40)).filter((it) => it.url && !it.title);
     await mapLimit(needInfo, 4, async (it) => {
@@ -85,11 +86,12 @@ export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fe
       log.warn(notes[notes.length - 1]);
     }
   } else if (ai && lines.length >= MIN_AI_LINES) {
-    const who = cfg.mode === 'claude' ? 'Claude' : 'Local AI';
+    const who = { claude: 'Claude', chatgpt: 'ChatGPT' }[cfg.mode] || 'Local AI';
     onProgress(`${who} is reading ${lines.length} messages and writing the summary`);
     try {
       const input = { lines, group: cfg.group.name || 'the group', days };
-      const written = cfg.mode === 'claude' ? await summariseWithClaude(input, cfg, { onProgress }) : await summariseWithLocal(input, cfg, { onProgress });
+      const write = { claude: summariseWithClaude, chatgpt: summariseWithChatGPT }[cfg.mode] || summariseWithLocal;
+      const written = await write(input, cfg, { onProgress });
       digest = mergeSummary(written, digest);
       digest.writtenBy = digest.source;
     } catch (err) {

@@ -39,7 +39,7 @@ export function buildTranscript(messages, { timeZone, linkInfo = new Map(), tran
     const quoted = m.QuotedMsgID && byId.get(m.QuotedMsgID);
     const r = reactions.get(m.MsgID);
     const rx = r ? ` [${[...r].map(([e, n]) => `${e}${n}`).join(' ')}]` : '';
-    const who = (x) => (x.FromMe ? 'a member' : displayName(x));
+    const who = (x) => displayName(x) || 'a member';
     lines.push(`[${when.format(new Date(m.Timestamp))}] ${who(m)}${quoted ? ` (replying to ${who(quoted)})` : ''}: ${truncate(text, 2000)}${rx}`);
   }
   return lines;

@@ -78,13 +78,14 @@ Each summary ends with a short line: *Made with wadigest: github.com/sgaabdu4/wa
 
 ## How the summary is written
 
-You choose in the sentence: *written simply*, *with local AI* or *with Claude*. You can change it any time.
+You choose in the sentence: *written simply*, *with local AI*, *with Claude* or *with ChatGPT*. Claude shows only when Claude Code or an API key is set up, and ChatGPT only when Codex is installed. You can change it any time.
 
 | Style | How it works | Good to know |
 | --- | --- | --- |
 | **Simply** (default) | Lists everything shared in the period, busiest first: every link with its page title, every video, every busy thread and every substantial message. | No AI, instant, nothing to install. |
 | **With local AI** | A small model that comes with wadigest ([Qwen3 1.7B](https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF), run by [llama.cpp](https://github.com/ggml-org/llama.cpp)) reads every message and writes the summary. | Runs on your computer, nothing leaves it. About a 1.3 GB download, once, checked against its published checksum. Around 20 to 30 seconds per group. |
 | **With Claude** | Claude Haiku reads every message and writes the summary. It uses [Claude Code](https://claude.com/claude-code) if you have it, or an API key. | The best writing. The chat, with names removed, and linked page text are sent to Anthropic. |
+| **With ChatGPT** | GPT-6-Luna reads every message and writes the summary, through [Codex](https://github.com/openai/codex) with your own ChatGPT login. | Shown only when Codex is installed. The chat, with names removed, and linked page text are sent to OpenAI. |
 
 The AI styles read every message, not just the popular ones: reactions only decide the order. Long chats are summarised in parts, then the parts are summarised again. Summaries are short, plain English (close to ASD-STE100), never invent topics, and only keep links that were really shared. If an AI style fails for any reason, the simple summary goes out instead, so a summary always arrives.
 
@@ -117,7 +118,7 @@ wadigest doctor         # check everything is working
 
 - Everything stays in `~/.wadigest` on your computer: the linked WhatsApp session, settings and logs.
 - wadigest opens the links people share, to read their titles and text.
-- Only with Claude does the chat leave your computer, to Anthropic.
+- Only with Claude or ChatGPT does the chat leave your computer, to Anthropic or OpenAI.
 - The AI never gets names or phone numbers. See below.
 - Summaries show the name each person set in WhatsApp. They never show the names saved in your phone's contacts.
 - To remove it, run `bash scripts/uninstall.sh` in the wadigest folder (`~/.wadigest/app` if you used the one command), then remove the device in WhatsApp under Linked devices.

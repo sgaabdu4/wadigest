@@ -28,6 +28,11 @@ export async function detectClaude() {
   return { cli: !!bin, bin };
 }
 
+export async function detectCodex() {
+  const bin = await which('codex');
+  return { cli: !!bin, bin };
+}
+
 /** Run a command, streaming each output line to onLog. Resolves on exit 0. */
 export function runStreaming(cmd, args, onLog, { env } = {}) {
   return new Promise((resolve, reject) => {

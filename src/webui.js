@@ -18,7 +18,7 @@ import { prepareDigest, runGroupNow, sentTodayAt } from './pipeline.js';
 import { renderGroupPost } from './format.js';
 import { normalizePhone } from './util.js';
 import { loadSecrets, saveSecrets } from './config.js';
-import { detectClaude, installLocalAI, installVideo, localStatus, runStreaming } from './setup-actions.js';
+import { detectClaude, detectCodex, installLocalAI, installVideo, localStatus, runStreaming } from './setup-actions.js';
 import { LLAMA_BUILDS, platformKey, localReady } from './local.js';
 
 const HTML_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), 'ui', 'index.html');
@@ -75,6 +75,7 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
   };
   // Send now reuses what Preview just built, so the AI doesn't write the summary twice.
   const previews = new Map();
+  const building = new Map();
   const previewKey = (g) => `${g.jid}|${g.anon === true}`;
   const previewSig = (c, g) => JSON.stringify([g.jid, g.anon === true, g.addedAt, c.mode, c.local, c.claude, c.schedule, c.topN, c.linkTitles]);
   const cachedPreview = (c, g) => {
@@ -253,10 +254,11 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
 
       if (route === '/api/mode' && req.method === 'GET') {
         const c = loadConfig();
-        const [claude, local] = await Promise.all([detectClaude(), localStatus(c)]);
+        const [claude, codex, local] = await Promise.all([detectClaude(), detectCodex(), localStatus(c)]);
         return send(res, 200, {
           mode: c.mode, platform: process.platform,
           claude: { cli: claude.cli, key: !!(process.env.ANTHROPIC_API_KEY || loadSecrets().anthropicApiKey) },
+          chatgpt: { cli: codex.cli },
           local: { ready: local.modelReady, model: local.model, video: local.video },
         });
       }
@@ -264,6 +266,8 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
         const body = await readBody(req);
         const c = loadConfig();
         try { setConfigValue(c, 'mode', String(body.mode || 'digest')); } catch (e) { return send(res, 400, { error: e.message }); }
+        // The background service may not have this shell's PATH, so remember where Codex lives.
+        if (c.mode === 'chatgpt') { const codex = await detectCodex(); if (codex.bin) c.chatgpt.command = codex.bin; }
         c.video.enabled = body.video ? 'auto' : 'off';
         if (body.apiKey) {
           if (!String(body.apiKey).startsWith('sk-')) return send(res, 400, { error: "That doesn't look like an Anthropic API key." });
@@ -323,14 +327,26 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
         const flag = (k) => (url.searchParams.has(k) ? url.searchParams.get(k) === '1' : undefined);
         const list = one ? c.groups.filter((g) => g.jid === one).map((g) => ({ ...g, ...(flag('anon') !== undefined && { anon: flag('anon') }), ...(flag('dm') !== undefined && { dm: flag('dm') }) })) : c.groups;
         if (!list.length) return send(res, 400, { error: 'That group is not in your list.' });
+        const build = async (g) => {
+          const { digest, messages, notes } = await prepareDigest({ cfg: groupConfig(c, g), state, wacli: new Wacli(c), window: rollingWindow(new Date(), readDays(c.schedule)), videos: false });
+          const p = { at: Date.now(), sig: previewSig(c, g), prepared: { digest, messages, notes } };
+          previews.set(previewKey(g), p);
+          return p;
+        };
+        // One group: answer at once and build in the background, because browsers give up on a request after about a minute.
+        if (one) {
+          const g = list[0];
+          if (!cachedPreview(c, g)) {
+            const k = previewKey(g);
+            const job = building.get(k);
+            if (job?.error) { building.delete(k); return send(res, 500, { error: job.error }); }
+            if (!job) building.set(k, { p: build(g).then(() => building.delete(k), (e) => building.set(k, { error: e.message })) });
+            return send(res, 200, { pending: true });
+          }
+        }
         for (const g of list) {
           const gc = groupConfig(c, g);
-          let p = url.searchParams.get('fresh') ? null : cachedPreview(c, g);
-          if (!p) {
-            const { digest, messages, notes } = await prepareDigest({ cfg: gc, state, wacli: new Wacli(c), window: rollingWindow(new Date(), readDays(c.schedule)), videos: false });
-            p = { at: Date.now(), sig: previewSig(c, g), prepared: { digest, messages, notes } };
-            previews.set(previewKey(g), p);
-          }
+          const p = (!url.searchParams.get('fresh') && cachedPreview(c, g)) || await build(g);
           out.push({ jid: g.jid, name: g.name, messages: p.prepared.messages, text: renderGroupPost(p.prepared.digest, { timeZone: c.schedule.timezone, audience: gc.dms.audience }) });
         }
         return send(res, 200, { previews: out });

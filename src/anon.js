@@ -20,7 +20,7 @@ export function pseudonymise(messages) {
     if (labels.has(k)) continue;
     const label = `Member ${labels.size + 1}`;
     labels.set(k, label);
-    names.set(label, m.FromMe ? '' : displayName(m));
+    names.set(label, displayName(m));
   }
   const byNumber = new Map([...labels].filter(([k]) => digits(k).length >= 6).map(([k, l]) => [digits(k), l]));
   const firsts = new Map();

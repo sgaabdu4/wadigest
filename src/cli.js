@@ -20,7 +20,7 @@ import { detectVideoTools } from './video.js';
 import { isGroupJid, normalizePhone, parseInterests } from './util.js';
 import { findGroups } from './groups.js';
 import { runSetupUI } from './webui.js';
-import { hasUI, detectClaude, installLocalAI, installVideo, localStatus } from './setup-actions.js';
+import { hasUI, detectClaude, detectCodex, installLocalAI, installVideo, localStatus } from './setup-actions.js';
 import { setGroups } from './reset.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -69,7 +69,7 @@ Settings
   wadigest config                show all settings
   wadigest config set KEY VALUE  schedule.everyDays 7 · schedule.day sunday · schedule.time 09:00
                                  schedule.readDays 0 (0 = same as everyDays) · schedule.timezone Europe/London
-                                 mode digest|local|claude|summary-file · topN 5 · dms.audience everyone|opted-in
+                                 mode digest|local|claude|chatgpt|summary-file · topN 5 · dms.audience everyone|opted-in
                                  pin.duration 24h|7d|30d · video.enabled auto|on|off
   wadigest config set-key        save an Anthropic API key (for mode claude without Claude Code)
 
@@ -227,14 +227,17 @@ async function cmdSetup(flags) {
 
     // 3. Summary style
     console.log('\nStep 3/5 · How should it write the digest?');
-    const [claude, local] = await Promise.all([detectClaude(), localStatus(cfg)]);
+    const [claude, codex, local] = await Promise.all([detectClaude(), detectCodex(), localStatus(cfg)]);
     console.log('  1. Simple summary: ranked by reactions and replies, no AI, nothing to install (recommended)');
     console.log(`  2. Local AI: runs on this computer, private, about 1.3 GB to download${local.modelReady ? ' (already installed ✓)' : ''}`);
     console.log(`  3. Claude: best writing, the week's top items go to Anthropic${claude.cli ? ' (Claude Code found ✓)' : ''}`);
-    const current = { digest: '1', local: '2', claude: '3' }[cfg.mode] || '1';
+    if (codex.cli) console.log('  4. ChatGPT: uses your ChatGPT login through Codex, the chat goes to OpenAI (Codex found ✓)');
+    const picks = codex.cli ? ['1', '2', '3', '4'] : ['1', '2', '3'];
+    const current = { digest: '1', local: '2', claude: '3', chatgpt: codex.cli ? '4' : '1' }[cfg.mode] || '1';
     let pickMode = '';
-    while (!['1', '2', '3'].includes(pickMode)) pickMode = await ask(rl, 'Pick 1, 2 or 3:', current);
-    const mode = { 1: 'digest', 2: 'local', 3: 'claude' }[pickMode];
+    while (!picks.includes(pickMode)) pickMode = await ask(rl, `Pick ${picks.slice(0, -1).join(', ')} or ${picks.at(-1)}:`, current);
+    const mode = { 1: 'digest', 2: 'local', 3: 'claude', 4: 'chatgpt' }[pickMode];
+    if (mode === 'chatgpt') cfg.chatgpt.command = codex.bin;
     const onLog = (l) => console.log(`   ${l}`);
     if (mode === 'local' && !local.modelReady) {
       try { await installLocalAI({ model: cfg.local?.model, onLog }); } catch (e) { console.log(`✖ ${e.message}\n  Using the simple summary for now. Run \`wadigest setup\` again to retry.`); }
