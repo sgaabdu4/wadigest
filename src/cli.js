@@ -336,7 +336,13 @@ async function cmdRun(base, flags) {
     rl.close();
     if (!/^y/i.test(a)) return console.log('Cancelled, nothing sent.');
   }
-  for (const g of groups) await runOne(groupConfig(base, g), flags);
+  // Sending needs WhatsApp's connection, which the background service holds: pause it for the run.
+  const was = stopServiceIfRunning();
+  try {
+    for (const g of groups) await runOne(groupConfig(base, g), flags);
+  } finally {
+    if (was) installService(base);
+  }
 }
 
 async function runOne(cfg, flags) {
@@ -345,12 +351,8 @@ async function runOne(cfg, flags) {
   console.log(`\n${cfg.group.name}: ${messages} messages → ${digest.items.length} item${digest.items.length === 1 ? '' : 's'}`);
   const noGroup = !!flags['no-group'] || !cfg.post;
   const key = noGroup ? null : `manual|${cfg.group.jid}|${weekKey(new Date(), cfg.schedule.timezone)}-${Date.now()}`;
-  const pauseSync = async (fn) => {
-    const was = stopServiceIfRunning();
-    try { return await fn(); } finally { if (was) installService(cfg); }
-  };
   const res = await deliver({
-    cfg, state, wacli, digest, key, noGroup, noDms: !!flags['no-dms'], pauseSync,
+    cfg, state, wacli, digest, key, noGroup, noDms: !!flags['no-dms'],
     onDm: (m, ok, err) => console.log(`  DM ${ok ? '✓' : '✗'} ${m.name || m.jid}${err ? `: ${err.message}` : ''}`),
   });
   if (res.group) console.log(`✅ Posted in ${cfg.group.name}${res.pinned ? ' and pinned it' : ` (not pinned: ${res.pinNote || 'pinning is off'})`}`);

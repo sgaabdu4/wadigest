@@ -239,6 +239,19 @@ export function rankMessages(messages) {
     usedAsItem.add(m.MsgID);
   }
 
+  // In a quiet chat, short messages are all there is: never call it quiet when people talked.
+  if (items.length < 3) {
+    for (const m of content) {
+      if (usedAsItem.has(m.MsgID) || !msgText(m)) continue;
+      items.push({
+        id: `post:${m.MsgID}`, kind: 'post', url: '', title: truncate(msgText(m), 90), description: '', text: truncate(msgText(m), 280),
+        sharedBy: displayName(m), sharedByJid: m.SenderJID || '', sharedAt: m.Timestamp, msgId: m.MsgID, msgIds: [m.MsgID],
+        sharers: new Set([m.SenderJID]), forwards: 0, emoji: new Map(reactions.get(m.MsgID) || []), replyMsgs: [], people: 1,
+      });
+      usedAsItem.add(m.MsgID);
+    }
+  }
+
   const finished = items.map((it) => {
     const replyWords = it.replyMsgs.reduce((n, r) => n + wordCount(msgText(r)), 0);
     const out = {

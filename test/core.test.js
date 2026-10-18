@@ -143,7 +143,9 @@ test('quiet but useful messages are kept; reactions only change the order', asyn
   const quiet = { MsgID: 'Q1', ChatJID: 'g@g.us', SenderJID: '447700000001@s.whatsapp.net', SenderName: 'Sam', Timestamp: '2026-10-15T10:00:00Z', Text: 'Heads up: the venue for Saturday moved to the library on King Street, doors open at ten' };
   const tiny = { ...quiet, MsgID: 'Q2', Text: 'ok thanks' };
   const { items } = rankMessages([quiet, tiny]);
-  assert.deepEqual(items.map((i) => i.id), ['post:Q1']);
+  assert.deepEqual(items.map((i) => i.id), ['post:Q1', 'post:Q2'], 'a quiet chat lists even short messages');
+  const busy = Array.from({ length: 4 }, (_, i) => ({ ...quiet, MsgID: `B${i}` }));
+  assert.ok(!rankMessages([...busy, tiny]).items.some((i) => i.id === 'post:Q2'), 'short chit-chat is left out of a busy chat');
 });
 
 test('summarise everything: long chats become notes, then a summary of the notes', async () => {
