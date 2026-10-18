@@ -22,7 +22,7 @@ function cleanForBold(s) {
 
 export function itemTitle(item) {
   if (item.title) return truncate(cleanForBold(item.title), 90);
-  if (item.kind === 'video') return item.text ? truncate(cleanForBold(item.text), 90) : `Video from ${item.sharedBy}`;
+  if (item.kind === 'video') return item.text ? truncate(cleanForBold(item.text), 90) : item.sharedBy ? `Video from ${item.sharedBy}` : 'A video';
   if (item.host) return item.host;
   return truncate(cleanForBold(item.text), 90) || 'Untitled';
 }

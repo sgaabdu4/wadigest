@@ -355,7 +355,8 @@ async function viewSettings() {
   const M = await api('/mode').catch(() => ({ mode: S.mode, claude: {}, local: {} }));
   const opt = (list, cur) => list.map(([v, t]) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${t}</option>`).join('');
   const often = OFTEN.some(([v]) => v === sc.everyDays) ? OFTEN : [...OFTEN, [sc.everyDays, `every ${sc.everyDays} days`]];
-  const tog = (g, k, text) => `<button class="tog ${g[k] !== false ? 'on' : ''}" data-jid="${esc(g.jid)}" data-k="${k}" aria-pressed="${g[k] !== false}">${text}</button>`;
+  const isOn = (g, k) => (k === 'anon' ? g.anon === true : g[k] !== false);
+  const tog = (g, k, text) => `<button class="tog ${isOn(g, k) ? 'on' : ''}" data-jid="${esc(g.jid)}" data-k="${k}" aria-pressed="${isOn(g, k)}">${text}</button>`;
   $('#app').innerHTML = `
     <h2>How it works</h2>
     <p class="lead">Tap the green words to change them.</p>
@@ -363,18 +364,18 @@ async function viewSettings() {
     <div id="modex"></div>
     ${[...picked.values()].map((g) => `
       <p class="gname">${esc(g.name)}</p>
-      <div class="toggles">${tog(g, 'post', 'Post in the group')}${S.pin ? tog(g, 'pin', 'Pin it') : ''}${tog(g, 'dm', 'Message each member')}</div>`).join('')}
+      <div class="toggles">${tog(g, 'post', 'Post in the group')}${S.pin ? tog(g, 'pin', 'Pin it') : ''}${tog(g, 'dm', 'Message each member')}${tog(g, 'anon', 'Anonymise members')}</div>`).join('')}
     <div id="serr" class="err hidden"></div>
     <button class="btn wide" id="save">${S.setupDone ? 'Save' : 'Start'}</button>
     <p class="center" style="margin-top:10px"><button class="btn link" id="back">Back</button></p>`;
   const paintTogs = () => document.querySelectorAll('.tog').forEach((t) => {
-    const on = picked.get(t.dataset.jid)[t.dataset.k] !== false;
+    const on = isOn(picked.get(t.dataset.jid), t.dataset.k);
     t.classList.toggle('on', on);
     t.setAttribute('aria-pressed', on);
   });
   document.querySelectorAll('.tog').forEach((t) => t.onclick = () => {
     const g = picked.get(t.dataset.jid);
-    g[t.dataset.k] = g[t.dataset.k] === false;
+    g[t.dataset.k] = !isOn(g, t.dataset.k);
     if (t.dataset.k === 'post' && g.post === false) g.pin = false;
     if (t.dataset.k === 'pin' && g.pin) g.post = true;
     paintTogs();
@@ -495,10 +496,19 @@ function viewHome() {
     lastQr = '';
     drawQr(link);
   };
-  $('#runnow').onclick = async () => {
-    if (!confirm(`Send a summary now to ${S.groups.map((g) => g.name).join(' and ')}?`)) return;
+  $('#runnow').onclick = () => {
     previewSeq++;
-    try { await api('/run', {}); } catch (e) { $('#out').innerHTML = note(e.message, 'bad'); return; }
+    clearInterval(tickTimer);
+    $('#out').innerHTML = `<p class="pvname">Send now to</p><div id="sendlist">${S.groups.map((g) => `<label class="grow"><input type="checkbox" data-jid="${esc(g.jid)}" ${g.sentToday ? '' : 'checked'}><span class="tick"></span><span>${esc(g.name)}${g.sentToday ? ` <span class="hint">(already sent today at ${esc(g.sentToday)})</span>` : ''}</span></label>`).join('')}</div>
+      <div id="senderr" class="err hidden"></div>
+      <button class="btn wide" id="sendgo" style="margin-top:18px">Send</button>
+      <p class="center" style="margin-top:10px"><button class="btn link" id="sendcancel">Cancel</button></p>`;
+    $('#sendcancel').onclick = () => loadPreview(false);
+    $('#sendgo').onclick = () => sendNow([...document.querySelectorAll('#sendlist input:checked')].map((c) => c.dataset.jid));
+  };
+  const sendNow = async (jids) => {
+    if (!jids.length) return showErr('#senderr', 'Tick at least one group.');
+    try { await api('/run', { groups: jids }); } catch (e) { $('#out').innerHTML = note(e.message, 'bad'); return; }
     clearInterval(pollTimer);
     const say = waiting($('#out'), 'Starting', 'This takes a few minutes. Private messages go out slowly on purpose, so WhatsApp stays happy.');
     pollTimer = setInterval(async () => {

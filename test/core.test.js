@@ -7,6 +7,8 @@ import { matchInterests } from '../src/members.js';
 import { renderGroupPost, renderPersonal } from '../src/format.js';
 import { buildDigest, mergeSummary, extractJson } from '../src/summary.js';
 import { msg, reaction } from './helpers.js';
+import { anonymiseMessages, scrubNames } from '../src/anon.js';
+import { buildTranscript } from '../src/fullsummary.js';
 
 test('links: extraction and canonicalisation dedupe the same link', () => {
   assert.deepEqual(extractUrls('look https://x.com/a/status/1?s=20 and (https://example.com/page).'), ['https://x.com/a/status/1?s=20', 'https://example.com/page']);
@@ -170,4 +172,40 @@ test('summarise everything: long chats become notes, then a summary of the notes
   assert.equal(out.rounds, 1);
   assert.deepEqual(out.items[0].urls, ['https://example.com/0']);
   assert.equal(out.items[0].url, 'https://example.com/0');
+});
+
+test('anon: no names or @mentions reach the summary, the AI sees stand-in labels', () => {
+  const t0 = Date.parse('2026-10-13T09:00:00Z');
+  const at = (h) => new Date(t0 + h * 3600e3).toISOString();
+  const rows = anonymiseMessages([
+    msg({ MsgID: 'L1', Text: 'great read https://example.com/post', SenderName: 'Sam Jones', Timestamp: at(0) }),
+    msg({ MsgID: 'R1', Text: 'agree with @447700900123, really useful', SenderJID: 'b@s.whatsapp.net', SenderName: 'Aisha', QuotedMsgID: 'L1', Timestamp: at(1) }),
+    msg({ MsgID: 'TH', Text: 'Which vector DB are you all using?', SenderName: 'Sam Jones', Timestamp: at(2) }),
+    msg({ MsgID: 'TH1', Text: 'pgvector has been solid for us', SenderJID: 'b@s.whatsapp.net', SenderName: 'Aisha', QuotedMsgID: 'TH', Timestamp: at(2.1) }),
+    msg({ MsgID: 'TH2', Text: 'qdrant', SenderJID: 'c@s.whatsapp.net', SenderName: 'Tom', QuotedMsgID: 'TH', Timestamp: at(2.2) }),
+  ]);
+  const lines = buildTranscript(rows, { timeZone: 'Europe/London' }).join('\n');
+  assert.match(lines, /Member 1/);
+  assert.doesNotMatch(lines, /Sam|Aisha|Tom|447700900123/);
+  const ranked = rankMessages(rows);
+  scrubNames(ranked.items);
+  const digest = buildDigest(ranked, { group: { jid: 'g@g.us', name: 'Developer Bros', anon: true }, window: { start: '2026-10-11T08:00:00Z', end: '2026-10-18T08:00:00Z' }, topN: 5 });
+  digest.items[0].summary = 'Member 2 agreed with Member 1. Member 3 said qdrant.';
+  scrubNames(digest);
+  const text = renderGroupPost(digest, { timeZone: 'Europe/London' });
+  assert.doesNotMatch(text, /Sam|Aisha|Tom|447700900123|Member \d|👤/);
+  assert.match(text, /A member agreed with a member\. A member said qdrant\./);
+});
+
+test('sent today: scheduled and manual sends count, other days and groups do not', async () => {
+  const { sentTodayAt } = await import('../src/pipeline.js');
+  const now = new Date('2026-10-18T20:00:00Z');
+  const state = { posted: {
+    'g1@g.us|2026-10-18': { at: '2026-10-18T08:00:00Z' },
+    'manual|g1@g.us|1': { at: '2026-10-18T16:08:00Z' },
+    'manual|g2@g.us|2': { at: '2026-10-17T16:08:00Z' },
+  } };
+  assert.equal(sentTodayAt(state, 'g1@g.us', 'Europe/London', now), '2026-10-18T16:08:00Z');
+  assert.equal(sentTodayAt(state, 'g2@g.us', 'Europe/London', now), null);
+  assert.equal(sentTodayAt(state, 'g3@g.us', 'Europe/London', now), null);
 });

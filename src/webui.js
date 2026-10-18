@@ -14,7 +14,7 @@ import { setGroups } from './reset.js';
 import { installService, serviceStatus, stopServiceIfRunning } from './service.js';
 import { loadMembers } from './members.js';
 import { nextSlot, rollingWindow, readDays, everyDays, describeSchedule, applySchedule } from './schedule.js';
-import { prepareDigest, runGroupNow } from './pipeline.js';
+import { prepareDigest, runGroupNow, sentTodayAt } from './pipeline.js';
 import { renderGroupPost } from './format.js';
 import { normalizePhone } from './util.js';
 import { loadSecrets, saveSecrets } from './config.js';
@@ -146,7 +146,10 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
       linked: !!st.authenticated,
       phone: st.phone || '',
       link: { status: link.status, kind: link.kind, code: link.code, qr: link.qr, error: link.error, messages: link.messages },
-      groups: cfg.groups,
+      groups: cfg.groups.map((g) => {
+        const at = sentTodayAt(state, g.jid, tz, now);
+        return { ...g, sentToday: at ? new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit' }).format(new Date(at)) : '' };
+      }),
       schedule: { ...cfg.schedule, everyDays: everyDays(cfg.schedule), readDays: readDays(cfg.schedule), text: describeSchedule(cfg.schedule) },
       nextRun: fmtWhen(nextSlot(now, cfg.schedule), tz),
       run: { running: run.running, done: run.done, total: run.total, log: run.log.slice(-8), error: run.error },
@@ -330,14 +333,17 @@ export async function runSetupUI({ open = true, port = 0 } = {}) {
 
       if (route === '/api/run' && req.method === 'POST') {
         const c = loadConfig();
-        if (!c.groups.length) return send(res, 400, { error: 'Pick a group first.' });
+        const body = await readBody(req);
+        const only = Array.isArray(body.groups) ? new Set(body.groups) : null;
+        const groups = only ? c.groups.filter((g) => only.has(g.jid)) : c.groups;
+        if (!groups.length) return send(res, 400, { error: 'Pick at least one group to send to.' });
         if (run.running) return send(res, 200, { ok: true });
-        Object.assign(run, { running: true, done: 0, total: c.groups.length, log: [], error: '' });
+        Object.assign(run, { running: true, done: 0, total: groups.length, log: [], error: '' });
         (async () => {
           // Sending needs WhatsApp's connection, which the background service holds: pause it for the run.
           const was = stopServiceIfRunning();
           const state = loadState();
-          for (const g of c.groups) {
+          for (const g of groups) {
             try {
               const onProgress = (t) => run.log.push(`${g.name}: ${t}`);
               let n = 0;

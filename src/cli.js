@@ -63,7 +63,7 @@ Your own summary  (Claude or anything else)
 
 Groups
   wadigest config add-group "Name"     wadigest config remove-group "Name"
-  wadigest config group "Name" post|pin|dm on|off
+  wadigest config group "Name" post|pin|dm|anon on|off
 
 Settings
   wadigest config                show all settings
@@ -292,7 +292,7 @@ function pickGroups(cfg, flags) {
 }
 
 function switches(g) {
-  return [g.post !== false && 'post', g.post !== false && g.pin !== false && 'pin', g.dm !== false && 'DM members'].filter(Boolean).join(', ') || 'nothing switched on';
+  return [g.post !== false && 'post', g.post !== false && g.pin !== false && 'pin', g.dm !== false && 'DM members', g.anon === true && 'names hidden'].filter(Boolean).join(', ') || 'nothing switched on';
 }
 
 async function buildNow(cfg, flags) {
@@ -490,7 +490,7 @@ async function cmdConfig(cfg, pos) {
   if (pos[0] === 'group') {
     const [, name, step, onoff] = pos;
     const g = name && findGroups(cfg.groups, name)[0];
-    if (!g || !['post', 'pin', 'dm'].includes(step) || !/^(on|off)$/.test(onoff || '')) throw new Error('Usage: wadigest config group "Group name" post|pin|dm on|off');
+    if (!g || !['post', 'pin', 'dm', 'anon'].includes(step) || !/^(on|off)$/.test(onoff || '')) throw new Error('Usage: wadigest config group "Group name" post|pin|dm|anon on|off');
     g[step] = onoff === 'on';
     saveConfig(cfg);
     return console.log(`${g.name}: ${switches(g)}`);

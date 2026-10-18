@@ -58,6 +58,7 @@ For every group you can switch these on or off:
 | **Post in the group** | The summary is posted in the group chat |
 | **Pin it** | The post is pinned for 7 days, so it stays at the top |
 | **Message each member** | Everyone in that group gets their own copy by private message, with their interests first ⭐. The copies are then deleted from your own chats ("delete for me"), so your feed stays clear. |
+| **Anonymise members** | No names or @mentions in the summary. Off by default. The AI still follows who replied to whom, using stand-in labels it never writes out. Names someone types inside a message stay as written. |
 
 Members can reply to wadigest by private message, or send in the group:
 

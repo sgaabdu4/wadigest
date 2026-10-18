@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import { paths, saveState, writeJsonAtomic, groupConfig } from './config.js';
 import { rollingWindow, readDays } from './schedule.js';
 import { rankMessages } from './rank.js';
+import { anonymiseMessages, scrubNames } from './anon.js';
 import { fetchLinkInfo } from './links.js';
 import { buildDigest, mergeSummary, readSummaryFile } from './summary.js';
 import { renderGroupPost, renderPersonal } from './format.js';
@@ -35,7 +36,9 @@ async function mapLimit(list, limit, fn) {
 export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fetchImpl, videos = true, onProgress = () => {} }) {
   if (!cfg.group?.jid) throw new Error('No group chosen yet. Run `wadigest setup` or `wadigest config set group "<name>"`.');
   const notes = [];
-  const messages = await wacli.listMessages({ chat: cfg.group.jid, after: window.start, before: window.end });
+  const anon = cfg.group.anon === true;
+  const raw = await wacli.listMessages({ chat: cfg.group.jid, after: window.start, before: window.end });
+  const messages = anon ? anonymiseMessages(raw) : raw;
 
   if (videos) {
     const v = await processVideos(wacli, cfg, state, messages, { max: 5 });
@@ -43,6 +46,7 @@ export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fe
   }
 
   const ranked = rankMessages(messages);
+  if (anon) scrubNames(ranked.items);
   for (const it of ranked.items) {
     const v = state.videos?.[it.msgId];
     if (it.kind === 'video' && v?.transcript) it.transcript = v.transcript;
@@ -93,6 +97,7 @@ export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fe
     }
   }
 
+  if (anon) scrubNames(digest);
   writeJsonAtomic(paths().lastDigest, digest);
   return { digest, messages: messages.length, notes, transcript: lines };
 }
@@ -214,7 +219,21 @@ export async function runGroupNow({ cfg, group, state, wacli, pauseSync, onDm, p
   const { digest, messages, notes } = prepared || await prepareDigest({ cfg: gc, state, wacli, window, onProgress });
   onProgress(`sending (${messages} messages read)`);
   saveState(state);
-  const key = gc.post ? `manual|${group.jid}|${Date.now()}` : null;
-  const res = await deliver({ cfg: gc, state, wacli, digest, key, noGroup: !gc.post, pauseSync, onDm });
+  const key = `manual|${group.jid}|${Date.now()}`;
+  const res = await deliver({ cfg: gc, state, wacli, digest, key: gc.post ? key : null, noGroup: !gc.post, pauseSync, onDm });
+  if (!gc.post && res.dms.some((d) => d.ok)) {
+    state.posted[key] = { at: new Date().toISOString(), dms: { sent: res.dms.filter((d) => d.ok).length, failed: res.dms.filter((d) => !d.ok).length } };
+    saveState(state);
+  }
   return { ...res, digest, messages, notes };
+}
+
+/** When this group's summary last went out today (any send, scheduled or manual), or null. */
+export function sentTodayAt(state, jid, timeZone, now = new Date()) {
+  const day = (d) => new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  const today = day(now);
+  const ats = Object.entries(state.posted || {})
+    .filter(([k, v]) => (k.startsWith(`${jid}|`) || k.startsWith(`manual|${jid}|`)) && v?.at && day(new Date(v.at)) === today)
+    .map(([, v]) => v.at).sort();
+  return ats.length ? ats[ats.length - 1] : null;
 }

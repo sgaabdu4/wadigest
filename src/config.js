@@ -36,7 +36,7 @@ function defaultTimezone() {
 export function defaultConfig() {
   return {
     // Each group gets its own digest. post/pin/dm switch each step on or off for that group.
-    groups: [], // [{ jid, name, post, pin, dm, addedAt }]
+    groups: [], // [{ jid, name, post, pin, dm, anon, addedAt }]
     // everyDays: how often. day: weekday of the runs (weekly) or of the first run (other
     // intervals, fixed as start). readDays: how many days each digest covers (0 = everyDays).
     schedule: { day: 'sunday', time: '09:00', timezone: defaultTimezone(), everyDays: 7, readDays: 0, start: '' },

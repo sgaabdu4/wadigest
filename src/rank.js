@@ -32,6 +32,7 @@ export function isNoise(m) {
 }
 
 export function displayName(m) {
+  if (m.Anon) return m.SenderName;
   const n = String(m.SenderName || '').trim();
   if (n && !/^\+?\d{6,}$/.test(n)) return n;
   if (m.FromMe) return 'me';

@@ -25,17 +25,18 @@ function sentence(s) {
 export function noAiSummary(item) {
   const parts = [];
   if (item.kind === 'post') {
-    return item.text && item.text !== item.title ? `${item.sharedBy}: “${truncate(item.text, 200)}”` : `From ${item.sharedBy}.`;
+    if (item.text && item.text !== item.title) return item.sharedBy ? `${item.sharedBy}: “${truncate(item.text, 200)}”` : `“${truncate(item.text, 200)}”`;
+    return item.sharedBy ? `From ${item.sharedBy}.` : 'Shared in the group.';
   }
   if (item.kind === 'thread') {
-    parts.push(`${item.sharedBy} started it; ${item.replies} replies${item.people ? ` from ${item.people} people` : ''}.`);
+    parts.push(`${item.sharedBy || 'A member'} started it; ${item.replies} replies${item.people ? ` from ${item.people} people` : ''}.`);
     const top = item.replySnippets?.find((r) => r.text && r.text.length > 15);
-    if (top) parts.push(`${top.by}: “${truncate(top.text, 120)}”`);
+    if (top) parts.push(top.by ? `${top.by}: “${truncate(top.text, 120)}”` : `“${truncate(top.text, 120)}”`);
     return parts.join(' ');
   }
   if (item.description) parts.push(sentence(truncate(item.description, 180)));
   if (item.transcript) parts.push(`From the video: “${truncate(item.transcript, 160)}”`);
-  if (item.text && item.text !== item.title && !(item.kind === 'video' && !item.title)) parts.push(`${item.sharedBy}: “${truncate(item.text, 140)}”`);
+  if (item.text && item.text !== item.title && !(item.kind === 'video' && !item.title)) parts.push(item.sharedBy ? `${item.sharedBy}: “${truncate(item.text, 140)}”` : `“${truncate(item.text, 140)}”`);
   if (item.timesShared > 1) parts.push(`Shared ${item.timesShared} times.`);
   return parts.join(' ');
 }
