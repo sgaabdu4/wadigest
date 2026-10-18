@@ -20,7 +20,7 @@ It takes about 10 minutes, once.
 3. **Scan the code.** On your phone, open WhatsApp, then Settings, Linked devices, Link a device. Point the phone at the code on the page.
 4. **Tick your groups**, then press **Continue**.
 5. **Read the sentence.** It says when the summary is sent. Tap a green word to change it. Then press **Start**.
-6. **Press Preview** to see what it would send. Nothing gets sent.
+6. **Read the preview.** The page shows the summary it would send. Nothing gets sent until the scheduled time, or until you press **Send now**.
 
 That's it. You can close the page and the window. If the computer asks whether to stop the running process, say yes. wadigest keeps running in the background.
 

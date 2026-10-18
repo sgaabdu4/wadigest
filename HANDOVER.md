@@ -204,7 +204,7 @@ No runtime dependencies: just Node 20+.
 ## 7. Next steps (in order)
 
 1. **Demo video:** v2 is done: `demo/wadigest-demo-v2.mp4` (1920x1080, 3:08). It uses real footage of the full flow recorded with the fake WhatsApp tool and sample groups, a Kokoro voice (`bm_fable`, speed 1.08, free, runs locally) and a soft ffmpeg music bed. v1 (ElevenLabs "George") is `demo/wadigest-demo-v1.mp4`. `demo/` is not committed (gitignored). Rebuild steps are in `demo/NOTES.md`. Its build scripts live in the session scratch folder, so copy them somewhere safe if you want to edit the video later. Not checked: the voice by ear, including how it says "wa-dee-jest". The ElevenLabs account has about 1,170 characters left until its monthly reset.
-2. **Before Sunday 25 October 09:00:** leave the runner's Mac on or asleep (it catches up within 3 days). Open the page (`wadigest`) and press **Preview** to check each group.
+2. **Before Sunday 25 October 09:00:** leave the runner's Mac on or asleep (it catches up within 3 days). Open the page (`wadigest`) and read the preview of each group on the home screen.
 3. **Invite test:** on the page, press **Invite**; someone scans it and sends `!digest join`. They should get a reply within about 2 minutes.
 4. **Windows:** run the one PowerShell line on a Windows PC and go through setup.
 5. **Tell the groups:** *"You'll get a summary of this group here and by private message. Send `!digest interests agents, n8n` to get your picks first, or `!digest stop` for no private messages."*
