@@ -10,6 +10,7 @@ export const DIGEST_MARKER = '📬'; // first character of every digest wadigest
 export const COMMAND_PREFIX = /^\s*[!/.]digest\b/i;
 
 const msgText = (m) => String(m.Text || m.MediaCaption || '').trim();
+const MIN_POST_WORDS = 12;
 
 export function isReaction(m) {
   return !!(m.ReactionToID && String(m.ReactionToID).trim());
@@ -208,6 +209,31 @@ export function rankMessages(messages) {
       people: people.size,
     });
     for (const r of replies) usedAsItem.add(r.MsgID);
+  }
+
+  // Anything else with real content counts too, reactions or not: useful context is often quiet.
+  for (const m of content) {
+    if (usedAsItem.has(m.MsgID) || wordCount(msgText(m)) < MIN_POST_WORDS) continue;
+    const replies = tree.descendants(m.MsgID).filter((r) => !usedAsItem.has(r.MsgID));
+    items.push({
+      id: `post:${m.MsgID}`,
+      kind: 'post',
+      url: '',
+      title: truncate(msgText(m), 90),
+      description: '',
+      text: truncate(msgText(m), 280),
+      sharedBy: displayName(m),
+      sharedByJid: m.SenderJID || '',
+      sharedAt: m.Timestamp,
+      msgId: m.MsgID,
+      msgIds: [m.MsgID],
+      sharers: new Set([m.SenderJID]),
+      forwards: 0,
+      emoji: new Map(reactions.get(m.MsgID) || []),
+      replyMsgs: replies,
+      people: 1,
+    });
+    usedAsItem.add(m.MsgID);
   }
 
   const finished = items.map((it) => {

@@ -40,7 +40,7 @@ export function defaultConfig() {
     // everyDays: how often. day: weekday of the runs (weekly) or of the first run (other
     // intervals, fixed as start). readDays: how many days each digest covers (0 = everyDays).
     schedule: { day: 'sunday', time: '09:00', timezone: defaultTimezone(), everyDays: 7, readDays: 0, start: '' },
-    topN: 5,
+    topN: 0, // simple summary: 0 = everything shared (up to 40); AI summaries always cover the whole chat
     // digest = simple summary, no AI. local = Ollama on this computer. claude = Claude (claude -p
     // or API key). summary-file = use a summary another tool drops at summary.path.
     mode: 'digest',
@@ -204,7 +204,7 @@ export function setConfigValue(cfg, key, rawValue) {
     throw new Error('mode must be digest, local, claude or summary-file');
   }
   if (key === 'dms.audience' && !['everyone', 'opted-in', 'off'].includes(value)) throw new Error('dms.audience must be everyone, opted-in or off');
-  if (key === 'topN' && (value < 1 || value > 10)) throw new Error('topN must be 1–10');
+  if (key === 'topN' && (value < 0 || value > 40)) throw new Error('topN must be 0 (everything) to 40');
   if (key === 'video.enabled' && !['auto', 'on', 'off'].includes(String(value))) {
     throw new Error('video.enabled must be auto, on or off');
   }

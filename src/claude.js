@@ -1,11 +1,11 @@
-// Optional Claude write-up (mode "claude"). Off by default.
+// Optional Claude write-up (mode "claude"). Off by default. Summarises every message in the window.
 // Uses the Anthropic API when an API key is saved (`wadigest config set-key`), otherwise
 // Claude Code's `claude -p` with the user's own login. Any failure -> caller falls back
 // to the no-AI digest, so a post still goes out.
 
 import { spawn } from 'node:child_process';
 import { loadSecrets } from './config.js';
-import { exportForSummariser, summariserPrompt, extractJson } from './summary.js';
+import { summariseAll } from './fullsummary.js';
 
 const DEFAULT_API_MODEL = 'claude-sonnet-5-5';
 
@@ -37,7 +37,7 @@ async function viaApi(prompt, apiKey, cfg, timeoutMs) {
       method: 'POST',
       signal: ctrl.signal,
       headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: cfg.claude?.model || DEFAULT_API_MODEL, max_tokens: 2000, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: cfg.claude?.model || DEFAULT_API_MODEL, max_tokens: 4000, messages: [{ role: 'user', content: prompt }] }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(`Anthropic API ${r.status}: ${j?.error?.message || 'request failed'}`);
@@ -48,11 +48,10 @@ async function viaApi(prompt, apiKey, cfg, timeoutMs) {
 }
 
 /** Returns a summary object (contract shape) written by Claude. Throws on any failure. */
-export async function summariseWithClaude(digest, cfg, { timeoutMs = 180_000 } = {}) {
-  const prompt = summariserPrompt(exportForSummariser(digest), cfg.topN || 5);
+export async function summariseWithClaude({ lines, group, days }, cfg, { timeoutMs = 300_000, onProgress } = {}) {
   const apiKey = process.env.ANTHROPIC_API_KEY || loadSecrets().anthropicApiKey;
-  const text = apiKey ? await viaApi(prompt, apiKey, cfg, timeoutMs) : await viaCli(prompt, cfg, timeoutMs);
-  const json = extractJson(text);
+  const ask = (prompt) => (apiKey ? viaApi(prompt, apiKey, cfg, timeoutMs) : viaCli(prompt, cfg, timeoutMs));
+  const json = await summariseAll({ lines, group, days, ask, maxChars: cfg.claude?.maxChars || 150_000, onProgress });
   json.source = apiKey ? 'claude-api' : 'claude-code';
   return json;
 }

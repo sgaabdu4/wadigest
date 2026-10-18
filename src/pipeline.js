@@ -12,6 +12,7 @@ import { loadMembers } from './members.js';
 import { processVideos } from './video.js';
 import { summariseWithClaude } from './claude.js';
 import { summariseWithLocal } from './local.js';
+import { buildTranscript, linkInfoFrom } from './fullsummary.js';
 import { log } from './log.js';
 import { sleep, randomBetween, jidUser } from './util.js';
 
@@ -31,7 +32,7 @@ async function mapLimit(list, limit, fn) {
 /**
  * @returns {Promise<{digest: object, messages: number, notes: string[]}>}
  */
-export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fetchImpl, videos = true }) {
+export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fetchImpl, videos = true, onProgress = () => {} }) {
   if (!cfg.group?.jid) throw new Error('No group chosen yet. Run `wadigest setup` or `wadigest config set group "<name>"`.');
   const notes = [];
   const messages = await wacli.listMessages({ chat: cfg.group.jid, after: window.start, before: window.end });
@@ -47,11 +48,12 @@ export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fe
     if (it.kind === 'video' && v?.transcript) it.transcript = v.transcript;
   }
 
-  const topN = cfg.topN || 5;
+  const topN = cfg.topN || 0;
+  const ai = cfg.mode === 'local' || cfg.mode === 'claude';
   if (cfg.linkTitles !== false) {
-    const needInfo = ranked.items.slice(0, topN + 10).filter((it) => it.url && !it.title);
+    const needInfo = ranked.items.slice(0, ai ? 40 : (topN || 40)).filter((it) => it.url && !it.title);
     await mapLimit(needInfo, 4, async (it) => {
-      const info = await fetchLinkInfo(it.url, { fetchImpl, wantText: cfg.mode === 'local' || cfg.mode === 'claude', timeoutMs: 8000 });
+      const info = await fetchLinkInfo(it.url, { fetchImpl, wantText: ai, timeoutMs: 8000 });
       if (info.title) it.title = info.title;
       if (info.description) it.description = info.description;
       if (info.siteName) it.siteName = info.siteName;
@@ -61,6 +63,9 @@ export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fe
 
   let digest = buildDigest(ranked, { group: cfg.group, window, topN });
   digest.writtenBy = 'wadigest (no AI)';
+  const transcripts = Object.fromEntries(Object.entries(state.videos || {}).filter(([, v]) => v.transcript).map(([id, v]) => [id, v.transcript]));
+  const lines = buildTranscript(messages, { timeZone: cfg.schedule.timezone, linkInfo: linkInfoFrom(ranked.items), transcripts });
+  const days = Math.max(1, Math.round((new Date(window.end).getTime() - new Date(window.start).getTime()) / 864e5));
 
   const external = summaryFile || (cfg.mode === 'summary-file' && cfg.summary?.path ? cfg.summary.path : null);
   if (external) {
@@ -74,10 +79,11 @@ export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fe
       notes.push(`Summary file not used, fell back to the no-AI digest: ${err.message}`);
       log.warn(notes[notes.length - 1]);
     }
-  } else if ((cfg.mode === 'claude' || cfg.mode === 'local') && ranked.items.length) {
+  } else if (ai && lines.length) {
     const who = cfg.mode === 'claude' ? 'Claude' : 'Local AI';
     try {
-      const written = cfg.mode === 'claude' ? await summariseWithClaude(digest, cfg) : await summariseWithLocal(digest, cfg, { fetchImpl: fetchImpl || fetch });
+      const input = { lines, group: cfg.group.name || 'the group', days };
+      const written = cfg.mode === 'claude' ? await summariseWithClaude(input, cfg, { onProgress }) : await summariseWithLocal(input, cfg, { fetchImpl: fetchImpl || fetch, onProgress });
       digest = mergeSummary(written, digest);
       digest.writtenBy = digest.source;
     } catch (err) {
@@ -87,7 +93,7 @@ export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fe
   }
 
   writeJsonAtomic(paths().lastDigest, digest);
-  return { digest, messages: messages.length, notes };
+  return { digest, messages: messages.length, notes, transcript: lines };
 }
 
 function shellQuote(s) {

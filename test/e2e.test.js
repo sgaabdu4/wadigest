@@ -43,7 +43,7 @@ test('preview pipeline: pages through wacli, ranks, stays inside the group and t
   const wacli = new Wacli(cfg);
   const { digest, messages } = await prepareDigest({ cfg, state, wacli, window: rollingWindow(), fetchImpl: noFetch });
   assert.equal(messages, 122); // 120 + 2 reactions; old and other-group excluded
-  assert.equal(digest.items.length, 5);
+  assert.equal(digest.items.length, 12, 'every link shared, not just a top 5');
   assert.equal(digest.items[0].url, 'https://example.com/tool-10'); // the reacted one
   assert.ok(!digest.items.some((i) => /old|family/.test(i.url)));
 });

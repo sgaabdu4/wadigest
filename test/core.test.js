@@ -137,3 +137,35 @@ test('summary: hand-in summaries merge with ranked stats and are validated', () 
   assert.throws(() => mergeSummary({ items: [{ summary: 'x' }] }, base), /title is required/);
   assert.deepEqual(extractJson('Sure!\n```json\n{"a":1}\n```'), { a: 1 });
 });
+
+test('quiet but useful messages are kept; reactions only change the order', async () => {
+  const { rankMessages } = await import('../src/rank.js');
+  const quiet = { MsgID: 'Q1', ChatJID: 'g@g.us', SenderJID: '447700000001@s.whatsapp.net', SenderName: 'Sam', Timestamp: '2026-10-15T10:00:00Z', Text: 'Heads up: the venue for Saturday moved to the library on King Street, doors open at ten' };
+  const tiny = { ...quiet, MsgID: 'Q2', Text: 'ok thanks' };
+  const { items } = rankMessages([quiet, tiny]);
+  assert.deepEqual(items.map((i) => i.id), ['post:Q1']);
+});
+
+test('summarise everything: long chats become notes, then a summary of the notes', async () => {
+  const { buildTranscript, summariseAll } = await import('../src/fullsummary.js');
+  const base = { ChatJID: 'g@g.us', SenderName: 'Ali', SenderJID: '447700000002@s.whatsapp.net' };
+  const msgs = [];
+  for (let i = 0; i < 60; i++) msgs.push({ ...base, MsgID: `M${i}`, Timestamp: new Date(Date.UTC(2026, 9, 15, 0, i)).toISOString(), Text: `message number ${i} about topic ${i % 3} https://example.com/${i % 3}` });
+  msgs.push({ ...base, MsgID: 'R1', Timestamp: '2026-10-15T02:00:00Z', ReactionToID: 'M1', ReactionEmoji: '🔥' });
+  msgs.push({ ...base, MsgID: 'C1', Timestamp: '2026-10-15T02:01:00Z', Text: '!digest status' });
+  const lines = buildTranscript(msgs, { timeZone: 'UTC' });
+  assert.equal(lines.length, 60, 'reactions and commands are not lines');
+  assert.match(lines[1], /\[🔥1\]$/);
+  const calls = [];
+  const ask = async (prompt, { json }) => {
+    calls.push({ json, size: prompt.length });
+    if (!json) return '- topic: notes';
+    return JSON.stringify({ intro: 'All about topics.', items: [{ title: 'Topic 0', summary: 'Talked a lot.', urls: ['https://example.com/0', 'not a url'] }] });
+  };
+  const out = await summariseAll({ lines, group: 'G', days: 7, ask, maxChars: 1000 });
+  assert.ok(calls.filter((c) => !c.json).length >= 2, 'the chat was split into parts');
+  assert.equal(calls.at(-1).json, true);
+  assert.equal(out.rounds, 1);
+  assert.deepEqual(out.items[0].urls, ['https://example.com/0']);
+  assert.equal(out.items[0].url, 'https://example.com/0');
+});

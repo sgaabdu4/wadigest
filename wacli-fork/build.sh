@@ -6,6 +6,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT="${1:-${WADIGEST_HOME:-$HOME/.wadigest}/bin/wacli}"
+case "$OUT" in /*) ;; *) OUT="$PWD/$OUT" ;; esac
 TAG="${WACLI_TAG:-v0.22.0}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -14,7 +15,7 @@ command -v go >/dev/null || { echo "Go is not installed (brew install go)"; exit
 command -v git >/dev/null || { echo "git is not installed"; exit 1; }
 
 echo "==> Fetching wacli $TAG"
-git -c advice.detachedHead=false clone -q --depth 1 --branch "$TAG" https://github.com/openclaw/wacli "$WORK/wacli"
+git -c advice.detachedHead=false -c core.autocrlf=false clone -q --depth 1 --branch "$TAG" https://github.com/openclaw/wacli "$WORK/wacli"
 cd "$WORK/wacli"
 
 echo "==> Adding 'messages pin'"

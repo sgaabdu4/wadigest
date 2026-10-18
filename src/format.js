@@ -5,7 +5,7 @@ import { DIGEST_MARKER } from './rank.js';
 import { matchInterests } from './members.js';
 import { truncate, plural } from './util.js';
 
-const KIND_ICON = { link: '🔗', 'video-link': '🎬', video: '🎬', thread: '💬' };
+const KIND_ICON = { link: '🔗', 'video-link': '🎬', video: '🎬', thread: '💬', post: '📝' };
 
 function dateRange(window, timeZone) {
   const s = new Date(window.start);
@@ -28,23 +28,34 @@ export function itemTitle(item) {
 }
 
 function engagement(item) {
-  const bits = [`👤 ${item.sharedBy}`];
+  const bits = item.sharedBy ? [`👤 ${item.sharedBy}`] : [];
   if (item.reactions) bits.push(`${item.topEmoji?.[0] || '👍'} ${item.reactions}`);
   if (item.replies) bits.push(`💬 ${item.replies}`);
   if (item.reshares) bits.push(`🔁 ${item.reshares}`);
   return bits.join(' · ');
 }
 
-function renderItem(item, n, { star = false, matched = [] } = {}) {
-  const lines = [];
-  const icon = KIND_ICON[item.kind] || '•';
-  lines.push(`${star ? '⭐ ' : ''}*${n}. ${itemTitle(item)}*`);
-  if (item.summary) lines.push(truncate(item.summary, 320));
-  if (item.url) lines.push(`${icon} ${item.canonicalUrl || item.url}`);
-  else if (item.kind === 'video') lines.push(`${icon} video in the chat${item.sharedAt ? `, ${new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(item.sharedAt))}` : ''}`);
-  lines.push(engagement(item) + (matched.length ? ` · for you: ${matched.join(', ')}` : ''));
+function linkLines(item) {
+  const icon = KIND_ICON[item.kind] || '🔗';
+  const urls = item.urls?.length ? item.urls : item.url ? [item.canonicalUrl || item.url] : [];
+  if (urls.length) return urls.map((u) => `${icon} ${u}`);
+  if (item.kind === 'video') return [`${icon} video in the chat${item.sharedAt ? `, ${new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(item.sharedAt))}` : ''}`];
+  return [];
+}
+
+/** compact: one short block for the long tail of a "everything shared" list. */
+function renderItem(item, n, { star = false, matched = [], compact = false } = {}) {
+  const meta = engagement(item) + (matched.length ? `${engagement(item) ? ' · ' : ''}for you: ${matched.join(', ')}` : '');
+  if (compact) return [`${star ? '⭐ ' : ''}*${n}. ${itemTitle(item)}*${meta ? `  ${meta}` : ''}`, ...linkLines(item).slice(0, 1)].join('\n');
+  const lines = [`${star ? '⭐ ' : ''}*${n}. ${itemTitle(item)}*`];
+  if (item.summary) lines.push(truncate(item.summary, 500));
+  lines.push(...linkLines(item));
+  if (meta) lines.push(meta);
   return lines.join('\n');
 }
+
+const FULL_ITEMS = 5;
+const compactAfter = (digest) => (digest.source === 'wadigest' ? FULL_ITEMS : Infinity);
 
 function period(digest) {
   const days = Math.round((Date.parse(digest.window?.end) - Date.parse(digest.window?.start)) / 864e5);
@@ -60,7 +71,7 @@ export function renderGroupPost(digest, { timeZone, audience = 'everyone' } = {}
   ];
   if (digest.intro) head.push('', truncate(digest.intro, 400));
   const body = digest.items.length
-    ? digest.items.map((it, i) => renderItem(it, i + 1)).join('\n\n')
+    ? digest.items.map((it, i) => renderItem(it, i + 1, { compact: i >= compactAfter(digest) })).join('\n\n')
     : 'All quiet, nothing stood out. 🌙';
   const foot = digest.footer ?? (audience === 'everyone'
     ? '_Everyone here gets a copy by DM too. Want your picks first? Send *!digest interests agents, n8n* · No DMs: *!digest stop*_'
@@ -89,13 +100,13 @@ export function renderPersonal(digest, member, { timeZone } = {}) {
     interests.length
       ? (hits.length || extras.length
         ? `${first ? `Hi ${first}! ` : ''}Picks for *${interests.join(', ')}* come first ⭐`
-        : `${first ? `Hi ${first}! ` : ''}Nothing matched *${interests.join(', ')}* this time, so here's the full top ${digest.items.length}.`)
-      : `${first ? `Hi ${first}! ` : ''}Here's the top ${digest.items.length}. Add interests with *!digest interests …* to get your picks first.`,
+        : `${first ? `Hi ${first}! ` : ''}Nothing matched *${interests.join(', ')}* this time, so here's everything.`)
+      : `${first ? `Hi ${first}! ` : ''}Here's what happened. Add interests with *!digest interests …* to get your picks first.`,
   ];
   let n = 0;
   const blocks = [];
   for (const { it, matched } of hits) blocks.push(renderItem(it, ++n, { star: true, matched }));
-  for (const { it } of rest) blocks.push(renderItem(it, ++n));
+  for (const { it } of rest) blocks.push(renderItem(it, ++n, { compact: n >= compactAfter(digest) }));
   if (extras.length) {
     blocks.push('*Also for you*');
     for (const { it, matched } of extras) blocks.push(renderItem(it, ++n, { star: true, matched }));

@@ -362,14 +362,14 @@ async function cmdExport(base, flags) {
   const groups = pickGroups(base, flags);
   if (groups.length > 1) throw new Error(`Pick one group with --group, e.g. --group "${groups[0].name}"`);
   const cfg = groupConfig(base, groups[0]);
-  const { digest } = await buildNow(cfg, flags);
-  const exported = exportForSummariser(digest);
+  const { digest, transcript } = await buildNow({ ...cfg, mode: 'digest' }, flags);
+  const exported = exportForSummariser(digest, transcript);
   const json = JSON.stringify(exported, null, 2);
   if (flags.out && flags.out !== true) {
     fs.writeFileSync(flags.out, json + '\n');
-    console.log(`Wrote ${exported.candidates.length} candidates to ${flags.out}`);
+    console.log(`Wrote ${transcript.length} messages and ${exported.candidates.length} links/threads to ${flags.out}`);
   } else if (!flags.prompt) console.log(json);
-  if (flags.prompt) console.log(summariserPrompt(exported, cfg.topN));
+  if (flags.prompt) console.log(summariserPrompt(exported));
 }
 
 async function cmdStatus(cfg) {
