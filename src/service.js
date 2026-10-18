@@ -115,7 +115,11 @@ export function installService(cfg) {
     const domain = `gui/${process.getuid()}`;
     sh('launchctl', ['bootout', `${domain}/${LABEL}`], { ignore: true });
     fs.writeFileSync(file, launchdPlist(cfg));
-    sh('launchctl', ['bootstrap', domain, file]);
+    try { sh('launchctl', ['bootstrap', domain, file]); } catch {
+      // Right after bootout, launchd can still be tearing the old job down.
+      execFileSync('sleep', ['2']);
+      sh('launchctl', ['bootstrap', domain, file]);
+    }
     sh('launchctl', ['enable', `${domain}/${LABEL}`], { ignore: true });
     sh('launchctl', ['kickstart', '-k', `${domain}/${LABEL}`], { ignore: true });
     return `launchd agent ${file}`;

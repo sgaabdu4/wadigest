@@ -7,12 +7,14 @@ import { spawn } from 'node:child_process';
 import { loadSecrets } from './config.js';
 import { summariseAll } from './fullsummary.js';
 
-const DEFAULT_API_MODEL = 'claude-sonnet-5-5';
+// Summarising is light work, so the small, fast model is the default.
+const DEFAULT_API_MODEL = 'claude-haiku-5-5';
+const DEFAULT_CLI_MODEL = 'haiku';
 
 function viaCli(prompt, cfg, timeoutMs) {
   return new Promise((resolve, reject) => {
     const args = ['-p', '--output-format', 'text'];
-    if (cfg.claude?.model) args.push('--model', cfg.claude.model);
+    args.push('--model', cfg.claude?.model || DEFAULT_CLI_MODEL);
     const child = spawn(cfg.claude?.command || 'claude', args, { stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
     let err = '';
