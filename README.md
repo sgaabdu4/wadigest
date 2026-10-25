@@ -88,7 +88,7 @@ You choose in the sentence: *written simply*, *with local AI*, *with Claude* or 
 | **With Claude** | Claude Haiku reads every message and writes the summary. It uses [Claude Code](https://claude.com/claude-code) if you have it, or an API key. | The best writing. The chat, with names removed, and linked page text are sent to Anthropic. |
 | **With ChatGPT** | GPT-6-Luna reads every message and writes the summary, through [Codex](https://github.com/openai/codex) with your own ChatGPT login. | Shown only when Codex is installed. The chat, with names removed, and linked page text are sent to OpenAI. |
 
-The AI styles read every message, not just the popular ones: reactions only decide the order. Long chats are summarised in parts, then the parts are summarised again. Summaries are short, plain English (close to ASD-STE100), never invent topics, and only keep links that were really shared. If an AI style fails for any reason, the simple summary goes out instead, so a summary always arrives.
+The AI styles read every message, not just the popular ones: reactions only decide the order. Long chats are summarised in parts, then the parts are summarised again. Summaries use short, plain English (close to ASD-STE100), group related messages, and keep original shared links. If an AI style fails or there are too few messages to summarise, the run stops without posting or sending DMs. Missing, invalid or stale configured summary files also stop the run. Retry once a summary can be produced.
 
 You can also write the summary somewhere else: `wadigest export --prompt` gives you the week's items and a ready-made prompt, and `wadigest run --summary summary.json` posts what comes back.
 

@@ -77,6 +77,7 @@ export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fe
   const days = Math.max(1, Math.round((new Date(window.end).getTime() - new Date(window.start).getTime()) / 864e5));
 
   const external = summaryFile || (cfg.mode === 'summary-file' && cfg.summary?.path ? cfg.summary.path : null);
+  if (cfg.mode === 'summary-file' && !external) throw new Error('No summary file configured; no digest was sent.');
   if (external) {
     try {
       const st = fs.statSync(external);
@@ -84,11 +85,10 @@ export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fe
       digest = mergeSummary(readSummaryFile(external), digest);
       digest.writtenBy = `summary file (${digest.source})`;
     } catch (err) {
-      if (summaryFile) throw err; // explicit --summary: don't silently fall back
-      notes.push(`Summary file not used, fell back to the no-AI digest: ${err.message}`);
-      log.warn(notes[notes.length - 1]);
+      throw new Error(`Summary file could not be used; no digest was sent: ${err.message}`, { cause: err });
     }
-  } else if (ai && lines.length >= MIN_AI_LINES) {
+  } else if (ai) {
+    if (lines.length < MIN_AI_LINES) throw new Error(`Only ${lines.length} messages, too few to summarise; no digest was sent.`);
     const who = { claude: 'Claude', chatgpt: 'ChatGPT' }[cfg.mode] || 'Local AI';
     onProgress(`${who} is reading ${lines.length} messages and writing the summary`);
     try {
@@ -98,8 +98,7 @@ export async function prepareDigest({ cfg, state, wacli, window, summaryFile, fe
       digest = mergeSummary(written, digest);
       digest.writtenBy = digest.source;
     } catch (err) {
-      notes.push(`${who} write-up failed, used the simple summary instead: ${err.message}`);
-      log.warn(notes[notes.length - 1]);
+      throw new Error(`${who} write-up failed; no digest was sent: ${err.message}`, { cause: err });
     }
   }
 
