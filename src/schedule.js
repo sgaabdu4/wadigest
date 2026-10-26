@@ -146,6 +146,7 @@ export function decide(now, cfg, state) {
   const slot = latestSlot(now, cfg.schedule);
   const date = weekKey(slot, cfg.schedule.timezone);
   if (!cfg.group?.jid) return { due: false, reason: 'no group chosen' };
+  if (cfg.post === false && cfg.dms?.enabled === false) return { due: false, reason: 'no delivery enabled' };
   const key = `${cfg.group.jid}|${date}`;
   // Before multi-group support, posts were keyed by date alone.
   if (state.posted?.[key] || state.posted?.[date]) return { due: false, reason: `already posted for ${key}`, key, slot };

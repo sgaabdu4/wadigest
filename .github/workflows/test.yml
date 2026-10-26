@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
   pull_request:
+permissions:
+  contents: read
 jobs:
   test:
     runs-on: ubuntu-24.04
@@ -13,3 +15,13 @@ jobs:
         with: { node-version: '22' }
       - run: for f in scripts/install.sh get.sh wacli-fork/build.sh scripts/uninstall.sh scripts/package.sh; do bash -n "$f"; done
       - run: npm test
+      - run: npm run package
+      - run: sha256sum release/*.tar.gz > release/SHA256SUMS
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: wadigest-${{ github.sha }}
+          path: |
+            release/*.tar.gz
+            release/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 3
