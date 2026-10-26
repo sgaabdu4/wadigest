@@ -1,5 +1,5 @@
 // Optional ChatGPT write-up (mode "chatgpt"). Runs `codex exec` with the user's own ChatGPT login,
-// read-only in an empty folder. Any failure -> caller falls back to the no-AI digest.
+// read-only in an empty folder.
 
 import fs from 'node:fs';
 import os from 'node:os';

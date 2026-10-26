@@ -140,6 +140,7 @@ export async function summariseAll({ lines, group, days, ask, maxChars, onProgre
     return { title: String(x.title), summary: String(x.summary || ''), url: urls[0] || '', urls, tags: Array.isArray(x.tags) ? x.tags : [] };
   });
   if (!out.items.length) throw new Error('the reply had no items');
+  if (out.items.some(item => !item.summary.trim())) throw new Error('the reply had an item without a summary');
   out.rounds = rounds;
   return out;
 }

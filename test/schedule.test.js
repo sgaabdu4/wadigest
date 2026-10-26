@@ -1,10 +1,23 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { latestSlot, nextSlot, weekKey, windowFor, decide, zonedToUtc, applySchedule, describeSchedule, readDays } from '../src/schedule.js';
+import { groupConfig } from '../src/config.js';
 
 const sched = { day: 'sunday', time: '09:00', timezone: 'Europe/London' };
 const cfg = (over = {}) => ({ schedule: sched, group: { jid: 'g@g.us', name: 'G' }, installedAt: '2026-10-01T00:00:00Z', ...over });
 const empty = () => ({ posted: {}, attempts: {} });
+
+test('a group with posting and DMs disabled is never scheduled', () => {
+  const c = groupConfig(cfg({ dms: { enabled: true } }), { jid: 'g@g.us', post: false, dm: false });
+  const result = decide(new Date('2026-10-18T09:00:00Z'), c, empty());
+  assert.equal(result.due, false);
+  assert.equal(result.reason, 'no delivery enabled');
+});
+
+test('a group with DMs enabled can still run without a group post', () => {
+  const c = groupConfig(cfg({ dms: { enabled: true } }), { jid: 'g@g.us', post: false, dm: true });
+  assert.equal(decide(new Date('2026-10-18T09:00:00Z'), c, empty()).due, true);
+});
 
 test('zonedToUtc handles BST and GMT', () => {
   assert.equal(zonedToUtc(2026, 10, 18, 9, 0, 'Europe/London').toISOString(), '2026-10-18T08:00:00.000Z'); // BST

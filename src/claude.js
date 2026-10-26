@@ -1,7 +1,6 @@
 // Optional Claude write-up (mode "claude"). Off by default. Summarises every message in the window.
 // Uses the Anthropic API when an API key is saved (`wadigest config set-key`), otherwise
-// Claude Code's `claude -p` with the user's own login. Any failure -> caller falls back
-// to the no-AI digest, so a post still goes out.
+// Claude Code's `claude -p` with the user's own login.
 
 import { spawnCli } from './util.js';
 import { loadSecrets } from './config.js';
